@@ -734,7 +734,7 @@ section {
 }
 
 .services .icon-box:hover .icon::before {
-  background: #e82d2d;
+  background: #342C2A;
 }
 
 .services .icon-box:hover h4 a,
@@ -807,7 +807,7 @@ section {
 
 .portfolio #portfolio-flters li:hover,
 .portfolio #portfolio-flters li.filter-active {
-  color: #e82d2d;
+  color: #342C2A;
 }
 
 .portfolio #portfolio-flters li:last-child {
@@ -880,7 +880,7 @@ section {
 }
 
 .portfolio .portfolio-item .portfolio-links a:hover {
-  color: #e82d2d;
+  color: #342C2A;
 }
 
 .portfolio .portfolio-item:hover .portfolio-info {
@@ -1037,7 +1037,7 @@ section {
 }
 
 .pricing .box .btn-buy:hover {
-  background: #e82d2d;
+  background: #342C2A;
 }
 
 .pricing .featured {
@@ -1234,7 +1234,7 @@ section {
 }
 
 .contact .php-email-form button[type=submit]:hover {
-  background: #e82d2d;
+  background: #342C2A;
 }
 
 @-webkit-keyframes animate-loading {
@@ -1425,7 +1425,7 @@ section {
 }
 
 #footer .footer-top .footer-newsletter form input[type=submit]:hover {
-  background: #e82d2d;
+  background: #342C2A;
 }
 
 #footer .copyright {
@@ -1442,7 +1442,7 @@ section {
 }
 
 #footer .credits a {
-  color: #e82d2d;
+  color: #342C2A;
 }
 
 @media (max-width: 575px) {

@@ -87,8 +87,8 @@
   <section id="hero" class="d-flex align-items-center">
     <div class="container position-relative" data-aos="fade-up" data-aos-delay="500">
       <h1>Hunter Biden's Laptop</h1>
-      <h2>Investigating the spread of conspiracy theories on witter</h2>
-      <a href="#about" class="btn-get-started scrollto">Get Started</a>
+      <h2>Investigating the spread of information on Twitter</h2>
+      <a href="#introduction" class="btn-get-started scrollto">Get Started</a>
     </div>
   </section><!-- End Hero -->
 
@@ -100,7 +100,7 @@
         <div class="section-title">
           <span>Introduction</span>
           <h2>Introduction</h2>
-          <p>Sit sint consectetur velit quisquam cupiditate impedit suscipit alias</p>
+          <p>The purpose of this project was to investigate the role of journalists and mainstream media in promoting harmful narratives. To do so, the following subquestions will be answered:</p>
         </div>
 
         <div class="row">
@@ -110,14 +110,17 @@
           <div class="col-lg-6 pt-4 pt-lg-0 order-2 order-lg-1 content" data-aos="fade-right">
 
             <ul>
-              <li><i class="bi bi-check-circle"></i> Ullamco laboris nisi ut aliquip ex ea commodo consequat.</li>
-              <li><i class="bi bi-check-circle"></i> Duis aute irure dolor in reprehenderit in voluptate velit.</li>
-              <li><i class="bi bi-check-circle"></i> Ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate trideta storacalaperda mastiro dolore eu fugiat nulla pariatur.</li>
+              <li><i class="bi bi-1-circle"></i> How did mainstream coverage change the conversation on Hunter Biden’s laptop? </li>
+              <li><i class="bi bi-2-circle"></i> How did mainstream coverage spread the story of Hunter Biden’s laptop?</li>
+              <li><i class="bi bi-3-circle"></i> Additionally, though in a much more limited manner, how did the release of the Twitter Files affect the conversation about the conspiracy theory that Twitter suppressed the New York Post’s Hunter Biden laptop article at the request of Biden’s campaign team?</li>
             </ul>
             <p>
-              Ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate
-              velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
-              culpa qui officia deserunt mollit anim id est laborum
+              The story of Hunter Biden's laptop involves a messy chain of custody of a laptop purported to belong to Hunter Biden. 
+              The contents of this laptop was first reported on by the New York Post in 2020 and was used as evidence to support the Biden-Ukraine conspiracy theory. 
+              As this was during the election, social media platforms like Twitter restricted the sharing of this article, which led to a new conspiracy theory that the Biden campaign team colluded with Twitter to censor this story. 
+              More recently in November 2022, CBS became the latest news outlet to verify that the laptop truly belonged to Hunter Biden.
+              This story caught the eye of new Twitter CEO Elon Musk who released the Twitter Files, internal documents showing Twitter employees discussing the removal of tweets at the request of Biden's campaign team.
+              Though this made it seem like it was true that Twitter had restricted sharing of the Post's article on Hunter Biden's laptop, the tweets requested to be removed by Biden's team were actually inappropriate images of Hunter Biden.
             </p>
           </div>
         </div>
@@ -137,27 +140,32 @@
     <!-- ======= Methods Section ======= -->
     <section id="methods" class="introduction">
       <div class="container">
-
         <div class="row">
-          <div class="col" data-aos="fade-left">
+          <div class="col-lg-6 order-1 order-lg-2" data-aos="fade-left">
+            <script src="https://gist.github.com/zzoeys/11710d79a259863ac4c07817b05cb9cd.js"></script>
+          </div>
+          <div class="col-lg-6 pt-4 pt-lg-0 order-2 order-lg-1 content" data-aos="fade-right">
             <h3>Methods</h3>
-            <p class="fst-italic">
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore
-              magna aliqua.
-            </p>
-            <ul>
-              <li><i class="bi bi-check-circle"></i> Ullamco laboris nisi ut aliquip ex ea commodo consequat.</li>
-              <li><i class="bi bi-check-circle"></i> Duis aute irure dolor in reprehenderit in voluptate velit.</li>
-              <li><i class="bi bi-check-circle"></i> Ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate trideta storacalaperda mastiro dolore eu fugiat nulla pariatur.</li>
-            </ul>
             <p>
-              Ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate
-              velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
-              culpa qui officia deserunt mollit anim id est laborum
+              These above subquestions will be answered through the following:
             </p>
+            <div class="row">
+              <div class="col" data-aos="fade-right">
+              <ul>
+                <li><i class="bi bi-check-circle"></i> Generating a word cloud with the common words in the tweets containing the term “hunter biden laptop" for each day in the chosen timeframe.</li>
+                <li><i class="bi bi-check-circle"></i> Visualising the relative reach of related news coverage on the topic on a timeline, then visualising the number of tweets on the topic against the news coverage of the topic.</li>
+                <li><i class="bi bi-check-circle"></i>Visualising the number of tweets containing the terms “hunter biden laptop”, “collusion” and “dick pics” right before and after the release of the Twitter Files.</li>
+              </ul>
+              <p>
+                All datasets, code and Jupytper notebook detailing the steps taken can be found <a href="https://github.com/zzoeys/zzoeys.github.io/tree/master/anthro390/plots">here</a>.
+                A summary of the sources and data collected is in the table below:
+              </p>
+              <img src="assets/img/sources.png" class="img-fluid" alt="">
+    
+              </div>
+            </div>
           </div>
         </div>
-
       </div>
     </section><!-- End Introduction Section -->
 
@@ -166,12 +174,11 @@
       <div class="container">
 
         <div class="row">
-
           <div class="col-lg-4" data-aos="fade-up">
             <div class="box">
               <span>01</span>
               <h4>Word Clouds</h4>
-              <p>Ulamco laboris nisi ut aliquip ex ea commodo consequat. Et consectetur ducimus vero placeat</p>
+              <p>Identifying what phrases occurred most frequently in terms containing "hunter biden laptop".</p>
             </div>
           </div>
 
@@ -179,7 +186,7 @@
             <div class="box">
               <span>02</span>
               <h4>Media Coverage Analysis</h4>
-              <p>Dolorem est fugiat occaecati voluptate velit esse. Dicta veritatis dolor quod et vel dire leno para dest</p>
+              <p>Investigating how mainstream news reporting influenced the spread of information on Twitter.</p>
             </div>
           </div>
 
@@ -187,7 +194,7 @@
             <div class="box">
               <span>03</span>
               <h4>Twitter Files Analysis</h4>
-              <p>Molestiae officiis omnis illo asperiores. Aut doloribus vitae sunt debitis quo vel nam quis</p>
+              <p>Analysing the conversation on Twitter after the release of the Twitter Files.</p>
             </div>
           </div>
 
@@ -203,123 +210,159 @@
         <div class="section-title">
           <span>Data Visualisations</span>
           <h2>Data Visualisations</h2>
-          <p>Sit sint consectetur velit quisquam cupiditate impedit suscipit alias</p>
+          <p>Results of the investigation</p>
         </div>
-
-       <!-- <div class="row" data-aos="fade-up">
+        <div class="row aos-init" data-aos="fade-up">
           <div class="col-lg-12 d-flex justify-content-center">
             <ul id="portfolio-flters">
               <li data-filter="*" class="filter-active">All</li>
-              <li data-filter=".filter-wc">Word Clouds</li>
-              <li data-filter=".filter-mca">Media Coverage Analysis</li>
-              <li data-filter=".filter-tfa">Twitter Files Analysis</li>
+              <li data-filter=".filter-20">20 Nov</li>
+              <li data-filter=".filter-21">21 Nov</li>
+              <li data-filter=".filter-22">22 Nov</li>
+              <li data-filter=".filter-23">23 Nov</li>
+              <li data-filter=".filter-24">24 Nov</li>
+              <li data-filter=".filter-25">25 Nov</li>
+              <li data-filter=".filter-26">26 Nov</li>
+              <li data-filter=".filter-27">27 Nov</li>
             </ul>
           </div>
-        </div> -->
-        </div> 
-    </section>
+        </div>
 
-    <section id="dataviz/wordclouds" class="portfolio">
-      <p></p>
-      <div class="container">
-        <h3>Word Clouds</h3>
-        <p>
-          Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore
-          magna aliqua.
-        </p>
+      <section id="dataviz/wordclouds" class="portfolio">
+        <div class="container">
+          <p></p>
+            <h3>Word Clouds</h3>
+            <p>
+              Word clouds of tweets containing the term "hunter biden laptop" for the timeframe 20 November to 27 November. Pictures of relevant tweets are also shown.
+            </p>
 
-        <div class="portfolio-container mx-auto" data-aos="fade-up" data-aos-delay="150">
+            <div class="portfolio-container" data-aos="fade-up" data-aos-delay="150">
 
-          <div class="row justify-content-center">
-        
-            <div class="col-lg-4 portfolio-item mx-auto">
-              <img src="plots/wordclouds/df_20_nov.png" class="img-fluid" alt="">
-              <div class="portfolio-info">
-                <h4>20 Nov</h4>
-              </div>
-            </div>
+              <div class="row justify-content-center">
+            
+                <div class="col-lg-4 portfolio-item mx-auto filter-20">
+                  <img src="plots/wordclouds/df_20_nov.png" class="img-fluid" alt="">
+                  <div class="portfolio-info">
+                    <h4>20 Nov</h4>
+                  </div>
+                </div>
+                            
+                <div class="col-lg-4 portfolio-item mx-auto filter-20">
+                  <img src="assets/img/tweets/20-1.png" class="img-fluid" alt="">
+                  <div class="portfolio-info">
+                    <h4>20 Nov</h4>
+                  </div>
+                </div>
 
-            <div class="col-lg-4 portfolio-item mx-auto">
-              <img src="plots/wordclouds/df_21_nov.png" class="img-fluid" alt="">
-              <div class="portfolio-info">
-                <h4>21 Nov</h4>
-              </div>
-            </div>
+                <div class="col-lg-4 portfolio-item mx-auto filter-20">
+                  <img src="assets/img/tweets/20-2.png" class="img-fluid" alt="">
+                  <div class="portfolio-info">
+                    <h4>20 Nov</h4>
+                  </div>
+                </div>
+    
+                <div class="col-lg-4 portfolio-item mx-auto filter-21">
+                  <img src="plots/wordclouds/df_21_nov.png" class="img-fluid" alt="">
+                  <div class="portfolio-info">
+                    <h4>21 Nov</h4>
+                  </div>
+                </div>
+    
+                <div class="col-lg-4 portfolio-item mx-auto filter-22">
+                  <img src="plots/wordclouds/df_22_nov.png" class="img-fluid" alt="">
+                  <div class="portfolio-info">
+                    <h4>22 Nov</h4>
+                  </div>
+                </div>
 
-            <div class="col-lg-4 portfolio-item mx-auto">
-              <img src="plots/wordclouds/df_22_nov.png" class="img-fluid" alt="">
-              <div class="portfolio-info">
-                <h4>22 Nov</h4>
-              </div>
-            </div>
+                <div class="col-lg-4 portfolio-item mx-auto filter-22">
+                  <img src="assets/img/tweets/22-1.png" class="img-fluid" alt="">
+                  <div class="portfolio-info">
+                    <h4>22 Nov</h4>
+                  </div>
+                </div>
+    
+                <div class="col-lg-4 portfolio-item mx-auto filter-23">
+                  <img src="plots/wordclouds/df_23_nov.png" class="img-fluid" alt="">
+                  <div class="portfolio-info">
+                    <h4>23 Nov</h4>
+                  </div>
+                </div>
+    
+                <div class="col-lg-4 portfolio-item mx-auto filter-24">
+                  <img src="plots/wordclouds/df_24_nov.png" class="img-fluid" alt="">
+                  <div class="portfolio-info">
+                    <h4>24 Nov</h4>
+                  </div>
+                </div>
 
-            <div class="col-lg-4 portfolio-item mx-auto">
-              <img src="plots/wordclouds/df_23_nov.png" class="img-fluid" alt="">
-              <div class="portfolio-info">
-                <h4>23 Nov</h4>
-              </div>
-            </div>
+                <div class="col-lg-4 portfolio-item mx-auto filter-24">
+                  <img src="assets/img/tweets/24-1.png" class="img-fluid" alt="">
+                  <div class="portfolio-info">
+                    <h4>24 Nov</h4>
+                  </div>
+                </div>
+    
+                <div class="col-lg-4 portfolio-item mx-auto filter-25">
+                  <img src="plots/wordclouds/df_25_nov.png" class="img-fluid" alt="">
+                  <div class="portfolio-info">
+                    <h4>25 Nov</h4>
+                  </div>
+                </div>
+    
+    
+                <div class="col-lg-4 portfolio-item mx-auto filter-26">
+                  <img src="plots/wordclouds/df_26_nov.png" class="img-fluid" alt="">
+                  <div class="portfolio-info">
+                    <h4>26 Nov</h4>
+                  </div>
+                </div>
 
-            <div class="col-lg-4 portfolio-item mx-auto">
-              <img src="plots/wordclouds/df_24_nov.png" class="img-fluid" alt="">
-              <div class="portfolio-info">
-                <h4>24 Nov</h4>
-              </div>
-            </div>
-
-            <div class="col-lg-4 portfolio-item mx-auto">
-              <img src="plots/wordclouds/df_25_nov.png" class="img-fluid" alt="">
-              <div class="portfolio-info">
-                <h4>25 Nov</h4>
-              </div>
-            </div>
-
-
-            <div class="col-lg-4 portfolio-item mx-auto">
-              <img src="plots/wordclouds/df_26_nov.png" class="img-fluid" alt="">
-              <div class="portfolio-info">
-                <h4>26 Nov</h4>
-              </div>
-            </div>
-
-            <div class="col-lg-4 portfolio-item mx-auto">
-              <img src="plots/wordclouds/df_27_nov.png" class="img-fluid" alt="">
-              <div class="portfolio-info">
-                <h4>27 Nov</h4>
+                    
+                <div class="col-lg-4 portfolio-item mx-auto filter-26">
+                  <img src="assets/img/tweets/26-1.png" class="img-fluid" alt="">
+                  <div class="portfolio-info">
+                    <h4>26 Nov</h4>
+                  </div>
+                </div>
+    
+                <div class="col-lg-4 portfolio-item mx-auto filter-27">
+                  <img src="plots/wordclouds/df_27_nov.png" class="img-fluid" alt="">
+                  <div class="portfolio-info">
+                    <h4>27 Nov</h4>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
+        </section>
 
-    <section id="dataviz/mca">
-      <p></p>
-      <div class="container">
-        <h3>Media Coverage Anaysis</h3>
-        <p>
-          Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore
-          magna aliqua.
-        </p>
-        <div style="width:100%; padding-bottom:56.25%; position:relative;">
-          <iframe src="https://zzoeys.github.io/anthro390/plots/html/combined.html" style="position:absolute; top:0px; left:0px; 
-          width:100%; height:100%; border: none; overflow: hidden;"></iframe>
-        <div>
-      </div>
-    </section>
-    <section id="dataviz/tfa">
-      <p></p>
-      <div class="container">
-        <h3>Twitter Files Analysis</h3>
-        <p>
-          Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore
-          magna aliqua.
-        </p>
-        <div style="width:100%; padding-bottom:56.25%; position:relative;">
-          <iframe src="https://zzoeys.github.io/anthro390/plots/html/twitter_files.html" style="position:absolute; top:0px; left:0px; 
-          width:100%; height:100%; border: none; overflow: hidden;"></iframe>
-        <div>
-      </div>
+      <section id="dataviz/mca">
+        <p></p>
+        <div class="container">
+          <h3>Media Coverage Anaysis</h3>
+          <p>
+            A plot showing the timeline of news coverage alongside the number of tweets generated containing "hunter biden laptop" for the timeframe 20 November to 27 November.
+          </p>
+          <div style="width:100%; padding-bottom:56.25%; position:relative;">
+            <iframe src="https://zzoeys.github.io/anthro390/plots/html/combined.html" style="position:absolute; top:0px; left:0px; 
+            width:100%; height:100%; border: none; overflow: hidden;"></iframe>
+          <div>
+        </div>
+      </section>
+      <section id="dataviz/tfa">
+        <p></p>
+        <div class="container">
+          <h3>Twitter Files Analysis</h3>
+          <p>
+            A plot showing the number of tweets generated per hour containing the search terms "hunter biden laptop", "collusion" and "dick pics" for the timeframe 2 December to 7 December. 
+          </p>
+          <div style="width:100%; padding-bottom:56.25%; position:relative;">
+            <iframe src="https://zzoeys.github.io/anthro390/plots/html/twitter_files.html" style="position:absolute; top:0px; left:0px; 
+            width:100%; height:100%; border: none; overflow: hidden;"></iframe>
+          <div>
+        </div>
+      </section>
     </section>
     <!-- End Data Visualisations Section -->
 
@@ -330,7 +373,7 @@
         <div class="section-title">
           <span>Analysis</span>
           <h2>Analysis</h2>
-          <p>Sit sint consectetur velit quisquam cupiditate impedit suscipit alias</p>
+          <p>Analysing the results</p>
         </div>
 
         <div class="row">
@@ -338,21 +381,21 @@
           <div class="col-lg-4" data-aos="fade-up">
             <div class="box">
               <h4>The role of journalists</h4>
-              <p>Ulamco laboris nisi ut aliquip ex ea commodo consequat. Et consectetur ducimus vero placeat</p>
+              <p>Journalists can unintentionally promote misinformation. Even reporting the truth can ultimately sow more doubt and spread misinformation.</p>
             </div>
           </div>
 
           <div class="col-lg-4 mt-4 mt-lg-0" data-aos="fade-up" data-aos-delay="150">
             <div class="box">
               <h4>Elite amplification</h4>
-              <p>Dolorem est fugiat occaecati voluptate velit esse. Dicta veritatis dolor quod et vel dire leno para dest</p>
+              <p>Elon Musk gave the impression that the Twitter Files showed collusion between Biden's campaign team and Twitter to censor the New York Post story.</p>
             </div>
           </div>
 
           <div class="col-lg-4 mt-4 mt-lg-0" data-aos="fade-up" data-aos-delay="300">
             <div class="box">
-              <h4>Twitter Files Analysis</h4>
-              <p>Molestiae officiis omnis illo asperiores. Aut doloribus vitae sunt debitis quo vel nam quis</p>
+              <h4>Confirmation bias</h4>
+              <p>The initial belief that the Twitter Files showed collusion led to a confirmation bias in how people interpreted the content of the Twitter Files.</p>
             </div>
           </div>
 
@@ -367,8 +410,7 @@
 
         <div class="text-center">
           <h3>Conclusion</h3>
-          <p> Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
-          <a class="cta-btn" href="#">Call To Action</a>
+          <p> Ultimately, the investigation revealed how discourse on Twitter is shaped by reporting from mainstream news outlets, highlighting the importance of structural changes in journalism to tackle the spread of misinformation online.</p>
         </div>
 
       </div>

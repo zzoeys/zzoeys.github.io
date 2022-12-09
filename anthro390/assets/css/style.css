@@ -573,16 +573,24 @@ section {
 .introduction .content ul {
   list-style: none;
   padding: 0;
+  font-size: 15px;
 }
 
 .introduction .content ul li {
-  padding-bottom: 10px;
+  padding-bottom: 4px;
+  font-size: 15px;
 }
 
 .introduction .content ul i {
-  font-size: 20px;
+  font-size: 15px;
   padding-right: 4px;
-  color: #593d4a;
+  color: #000;
+}
+
+.introduction .content p {
+  font-size: 15px;
+  padding-right: 4px;
+  color: #000;
 }
 
 .introduction .content p:last-child {
@@ -606,7 +614,7 @@ section {
   display: block;
   font-size: 28px;
   font-weight: 700;
-  color: #ed5b5b;
+  color: #593d4a;
 }
 
 .results .box h4 {
@@ -787,9 +795,8 @@ section {
 
 .portfolio #portfolio-flters {
   padding: 0;
-  width: 50%;
-  margin: auto;
-  list-style: center;
+  margin: 0 auto 25px auto;
+  list-style: none;
   text-align: center;
   border-radius: 50px;
 }
@@ -803,12 +810,11 @@ section {
   line-height: 1;
   text-transform: uppercase;
   color: #444444;
-  width: 50%;
-  margin: auto;
   margin-bottom: 5px;
   transition: all 0.3s ease-in-out;
   font-family: "Poppins", sans-serif;
 }
+
 
 .portfolio #portfolio-flters li:hover,
 .portfolio #portfolio-flters li.filter-active {
@@ -841,6 +847,7 @@ section {
 
 .portfolio .portfolio-item .portfolio-info h4 {
   font-size: 12px;
+  margin-top: 25px;
   color: #fff;
   font-weight: 600;
   color: #191919;

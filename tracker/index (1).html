@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<meta name="theme-color" content="#faf8f3" />
+<title>Track My Portfolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0; background: #faf8f3; font-family: 'Sora', -apple-system, BlinkMacSystemFont, sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  #root { min-height: 100vh; }
+  button { font-family: inherit; }
+  input, textarea, select { font-family: inherit; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- React 18 + Babel for in-browser JSX compilation -->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel" data-type="module" data-presets="react">
+const { useState, useEffect, useRef } = React;
+const SCENARIOS = { bubble: { id: "bubble", icon: "💥", title: "AI Bubble Bursts", subtitle: "Hyperscaler capex freezes; AI narrative collapses", description: "Hyperscalers announce 20–40% capex cuts. NVDA misses guidance. AI ROI narrative questioned by CFOs. Similar to dot-com bust in tech capex, 2000–02.", color: "#dc2626", bg: "#fef2f2", impacts: { "ai-infra":    { score: -5, label: "Catastrophic", detail: "NVDA/NBIS/TSM are pure beneficiaries of AI capex — a freeze hits them hardest. NVDA dropped 66% in 2022 on a far smaller capex dip." }, "photonics":   { score: -5, label: "Catastrophic", detail: "Optical interconnects are 100% levered to data centre build-out. If racks stop shipping, LITE and AAOI revenues collapse within 2 quarters." }, "memory":      { score: -4, label: "Severe", detail: "HBM demand craters with AI accelerator orders. MU has 60%+ gross margins to give back. Memory is the most cyclical semi segment." }, "physical-ai": { score: -3, label: "High", detail: "Partially insulated — automotive & industrial lidar contracts have multi-year design-in cycles. But narrative stocks like OUST get de-rated fast." }, "power":       { score: -2, label: "Moderate", detail: "Grid infrastructure demand exists beyond AI (EV, reshoring). CEG/GEV have long-term contracts. VRT most exposed to data centre build slowdown." }, "space":       { score: -1, label: "Low", detail: "Commercial space has independent revenue streams (broadband, govt contracts). ASTS/RKLB not AI-dependent. May attract capital rotation." }, "quantum":     { score: -2, label: "Moderate", detail: "Government and pharma pilot contracts provide a floor. But narrative collapses further — IONQ/RGTI trade on sentiment, not earnings." }, "cybersecurity":  { score: -1, label: "Low", detail: "Security spending is counter-cyclical — enterprises cannot turn off firewalls. But multiple compression hits high-growth SaaS names like CRWD/ZS hard." }, "real-estate":   { score: 1, label: "Mild Tailwind", detail: "Data centre REITs (DLR, EQIX) partially insulated as hyperscaler lease commitments are multi-year. Traditional REITs benefit from capital rotation." }, "entertainment": { score: 3, label: "Strong Tailwind", detail: "The 'anti-AI' trade. If AI hype collapses, consumers double down on human-curated experiences — live events, theme parks, sport. LYV and DIS historically outperform post-tech busts." }}
+  }, tariff: { id: "tariff", icon: "🏛️", title: "US Tariff Nationalism", subtitle: "Broad tariffs, export controls & supply chain reshoring", description: "US imposes 25–60% tariffs broadly. Semiconductor export controls tighten. TSMC forced onshoring accelerates. Global trade volumes contract 10–15%.", color: "#7c3aed", bg: "#faf5ff", impacts: { "ai-infra":    { score: -3, label: "High", detail: "TSMC has Taiwan concentration risk and faces forced onshoring costs. NVDA export controls to China already biting — expand to allies possible. NBIS (European) partially shielded." }, "photonics":   { score: -4, label: "Severe", detail: "Asian wafer fabs and laser diode supply chains are heavily exposed. AAOI relies on Chinese manufacturing. 25% tariffs on optical components compress margins severely." }, "memory":      { score: -3, label: "High", detail: "MU benefits from tariffs on Chinese DRAM (CXMT hit hardest). But Samsung/Hynix tariffs raise own costs. WDC has Asian manufacturing exposure." }, "physical-ai": { score: -3, label: "High", detail: "LiDAR components manufactured in Asia. Chinese competitors (Hesai, RoboSense) face export bans but so do US firms' supply chains. Mixed net effect." }, "power":       { score: 2, label: "Tailwind", detail: "US power infrastructure is domestic — VRT, GEV, CEG all benefit from reshoring manufacturing demand and data centre onshoring. Potentially strongest beneficiary." }, "space":       { score: 1, label: "Mild Tailwind", detail: "National security spending increases under nationalist administrations. RKLB and ASTS benefit from US government contracts. Launch nationalism favours domestic names." }, "quantum":     { score: 1, label: "Mild Tailwind", detail: "Quantum is a national security technology. DoD/DARPA spending accelerates under nationalist policy. IONQ's government contracts become more valuable." }, "cybersecurity":  { score: 2, label: "Tailwind", detail: "US-first policy accelerates removal of foreign-origin software (Kaspersky precedent). CRWD, PANW, ZS are domestic champions. Federal contract pipeline grows." }, "real-estate":   { score: 1, label: "Mild Tailwind", detail: "Reshoring drives industrial REIT demand (SEGRO benefits from nearshoring logistics). Data centre leasing unaffected by tariffs — services not goods." }, "entertainment": { score: 2, label: "Tailwind", detail: "Tariffs are largely irrelevant to live entertainment — concerts, sports, and theme parks are domestic services. Consumers shift spend from imported goods to local experiences." }}
+  }
+};
+const NEWS_BY_THEME = {};
+const ETF_HOLDINGS = {};
+
+const themes = [ { id: "photonics", label: "Trending", labelColor: "#16a34a", labelBg: "#dcfce7", title: "Photonics", subtitle: "Light as the new bandwidth", risk: "Elevated", riskDots: 3, broadGroup: "tech", coreGroup: false, thesis: "Optical interconnects are becoming the backbone of next-generation AI data centres as copper hits physical limits at hyperscale. Photonics names benefit directly from every NVIDIA rack shipped.", stocks: [ { ticker: "LITE", name: "Lumentum Holdings Inc.", desc: "Optical components for 800G/1.6T datacom transceivers.", ytd: "+121.4%", price: "$854.96", mktCap: "$66.5B" }, { ticker: "AAOI", name: "Applied Optoelectronics, Inc.", desc: "Hyperscaler-direct laser & transceiver supplier.", ytd: "+300.0%", price: "$158.41", mktCap: "$12.7B" }, { ticker: "VIAV", name: "Viavi Solutions Inc.", desc: "Test & measurement for optical networks and 5G.", ytd: "+167.6%", price: "$48.56", mktCap: "$11.98B" }, ], etfs: [ { ticker: "SEMI", name: "VanEck Semiconductor UCITS ETF", desc: "Broad semiconductor exposure including photonics names.", platform: "Barclays SI", ter: "0.35%" }, { ticker: "IUIT", name: "iShares S&P 500 IT Sector UCITS ETF", desc: "Large-cap tech & hardware; captures LITE/VIAV at smaller weight.", platform: "Barclays SI", ter: "0.15%" }, ], risks: [ "Cyclical hyperscaler capex — single-customer concentration risk.", "Margin compression as Chinese transceiver vendors push 800G pricing down.", "Supply chain dependency on Asian wafer fabs and laser diode suppliers.", ]}, { id: "memory", label: "Catalyst", labelColor: "#d97706", labelBg: "#fef3c7", title: "Memory", subtitle: "HBM is the new oil", risk: "High", riskDots: 4, broadGroup: "tech", coreGroup: false, thesis: "AI accelerators consume HBM and DDR5 at unprecedented rates, and the industry just emerged from a brutal down-cycle. Pricing power is back and the supply side remains a 3-player oligopoly.", stocks: [ { ticker: "MU", name: "Micron Technology, Inc.", desc: "Only US HBM producer, levered directly to NVIDIA & AMD ramps.", ytd: "+207.8%", price: "$971.00", mktCap: "$1.10T" }, { ticker: "WDC", name: "Western Digital Corporation", desc: "NAND/HDD play; AI-driven data growth tailwind.", ytd: "+183.0%", price: "$531.21", mktCap: "$183.1B" }, ], etfs: [ { ticker: "SEMI", name: "VanEck Semiconductor UCITS ETF", desc: "Holds Micron and Korean memory proxies.", platform: "Barclays SI", ter: "0.35%" }, { ticker: "WTEC", name: "WisdomTree Global Technology UCITS ETF", desc: "Dividend-weighted tech; includes memory and storage.", platform: "Barclays SI", ter: "0.40%" }, ], risks: [ "Memory is the most cyclical semi segment — pricing can reverse fast.", "China's CXMT is ramping DRAM capacity and threatens long-term oligopoly pricing.", "HBM capacity additions from Samsung/Hynix could create 2026 oversupply.", ],
+    enablers: [
+      "800G/1.6T data centre buildout driving optical transceiver demand",
+      "Copper interconnects hitting physics limits at hyperscale rack density",
+      "NVIDIA Blackwell GPU racks require 4x more optical bandwidth than Hopper",
+    ]}, { id: "physical-ai", label: "Catalyst", labelColor: "#d97706", labelBg: "#fef3c7", title: "Physical AI", subtitle: "Robots, sensors & the real world", risk: "High", riskDots: 4, broadGroup: "tech", coreGroup: false, thesis: "AI is leaving the data centre. LiDAR, depth sensors, and humanoid robotics platforms are entering the deployment phase — moving from R&D budgets to actual revenue.", stocks: [ { ticker: "OUST", name: "Ouster, Inc.", desc: "Digital lidar leader with growing automotive & industrial wins.", ytd: "+97.05%", price: "$46.05", mktCap: "$2.93B" }, ], etfs: [ { ticker: "RBOT", name: "iShares Automation & Robotics UCITS ETF", desc: "Flagship robotics ETF on the London market.", platform: "Barclays SI", ter: "0.40%" }, { ticker: "ROBO", name: "L&G ROBO Global Robotics & Automation UCITS ETF", desc: "Pure-play robotics & AI index; covers sensors, actuators, humanoid developers.", platform: "Barclays SI", ter: "0.80%" }, ], risks: [ "LiDAR gross margins remain thin — Chinese competition (Hesai, RoboSense) is fierce.", "Auto OEM design wins move slowly; revenue ramp can disappoint quarter-to-quarter.", "Humanoid robotics still pre-revenue at most pure plays — narrative-driven volatility.", ],
+    enablers: [
+      "HBM3e now mandatory in every AI accelerator design",
+      "Post-downcycle inventory normalisation giving pricing power back to producers",
+      "DDR5 upgrade cycle in enterprise servers running parallel to AI demand",
+    ]}, { id: "ai-infra", label: "Trending", labelColor: "#16a34a", labelBg: "#dcfce7", title: "AI Infrastructure", subtitle: "The picks and shovels", risk: "Elevated", riskDots: 3, broadGroup: "tech", coreGroup: true, thesis: "Every major hyperscaler is in a multi-year capex super-cycle. The compute, foundry, and neocloud names are the cleanest exposure to AI demand growth without picking application winners.", stocks: [ { ticker: "NBIS", name: "Nebius Group N.V.", desc: "European GPU neocloud with NVIDIA-backed expansion.", ytd: "+156.9%", price: "$231.09", mktCap: "$58.67B" }, { ticker: "NVDA", name: "NVIDIA Corporation", desc: "The AI compute monopoly — Blackwell ramping, software moat widening.", ytd: "+11.8%", price: "$211.14", mktCap: "$5.11T" }, { ticker: "TSM", name: "Taiwan Semiconductor Manufacturing", desc: "The only fab that matters for leading-edge AI silicon.", ytd: "+30.9%", price: "$418.45", mktCap: "$2.17T" }, ], etfs: [ { ticker: "AIAI", name: "L&G Artificial Intelligence UCITS ETF", desc: "Pure-play AI index. Includes NVDA, TSM, and infrastructure names.", platform: "Barclays SI", ter: "0.49%" }, { ticker: "XAIX", name: "Xtrackers AI & Big Data UCITS ETF", desc: "Diversified AI value chain — hardware through software.", platform: "Barclays SI", ter: "0.35%" }, ], risks: [ "Hyperscaler capex digestion risk — any 2026 slowdown hits the whole stack.", "Geopolitical: Taiwan exposure, US-China export controls expanding.", "Custom silicon (Google TPU, Amazon Trainium) chipping away at NVDA's moat.", ],
+    enablers: [
+      "Hyperscaler capex guidance raised every quarter since 2023",
+      "GPU cluster demand structurally exceeds supply through 2026",
+      "Sovereign AI initiatives (UAE, France, Japan) creating new demand centres",
+    ],
+    enablers: [
+      "Tesla Optimus, Figure AI and 1X raising billions — validating humanoid market",
+      "Automotive LiDAR design wins converting from R&D to production revenue",
+      "Industrial automation capex accelerating as labour costs rise globally",
+    ]}, { id: "power", label: "Trending", labelColor: "#16a34a", labelBg: "#dcfce7", title: "Power", subtitle: "The new grid", risk: "Moderate", riskDots: 2, broadGroup: "energy", coreGroup: true, thesis: "AI data centres will roughly double US electricity demand growth this decade. Anything that generates, distributes, or cools electrons is in structural undersupply for the first time in 20 years.", stocks: [ { ticker: "VRT", name: "Vertiv Holdings Co.", desc: "Liquid cooling & power infrastructure — direct AI datacentre levered.", ytd: "+79.78%", price: "$315.71", mktCap: "$121.27B" }, { ticker: "GEV", name: "GE Vernova Inc.", desc: "Gas turbines & grid equipment; multi-year backlog.", ytd: "+42.49%", price: "$968.32", mktCap: "$260.21B" }, { ticker: "CEG", name: "Constellation Energy Corporation", desc: "Largest US nuclear fleet; hyperscaler PPA winner.", ytd: "-21.43%", price: "$287.75", mktCap: "$103.93B" }, { ticker: "TE", name: "T1 Energy Inc.", desc: "Power & data connectors for AI servers and grid.", ytd: "+34.69%", price: "$10.56", mktCap: "$2.95B" }, { ticker: "BE", name: "Bloom Energy Corporation", desc: "On-site fuel cells solving datacentre interconnect delays.", ytd: "+188.78%", price: "$285.00", mktCap: "$81.07B" }, ], etfs: [ { ticker: "INFR", name: "iShares Global Infrastructure UCITS ETF", desc: "Utilities, renewables & grid infrastructure.", platform: "Barclays SI", ter: "0.65%" }, { ticker: "INRG", name: "iShares Global Clean Energy UCITS ETF", desc: "Renewables and nuclear exposure (CEG via index).", platform: "Barclays SI", ter: "0.65%" }, ], risks: [ "Turbine & transformer lead times are 4+ years — execution risk is real.", "Valuations on power names already reflect AI narrative; multiple compression risk.", "Regulatory: nuclear PPAs facing FERC scrutiny; grid upgrade approvals slow.", ]}, { id: "space", label: "Catalyst", labelColor: "#d97706", labelBg: "#fef3c7", title: "Space", subtitle: "Orbital economy goes commercial", risk: "High", riskDots: 4, broadGroup: "defence", coreGroup: false, thesis: "Reusable launch has collapsed cost-to-orbit by 10x and direct-to-cell satellite is opening a $100B+ TAM. The space economy is finally moving from defence subsidies to genuine commercial revenue.", stocks: [ { ticker: "ASTS", name: "AST SpaceMobile, Inc.", desc: "Direct-to-phone satellite broadband; Verizon/AT&T deals signed.", ytd: "+35.87%", price: "$113.41", mktCap: "$44.02B" }, { ticker: "RKLB", name: "Rocket Lab Corporation", desc: "Small-launch leader; Neutron rocket targeting medium-lift.", ytd: "+88.81%", price: "$143.48", mktCap: "$83.06B" }, ], etfs: [ { ticker: "SPCE", name: "iShares Space & Aerospace UCITS ETF", desc: "Covers commercial space, defence aerospace, and satellite operators.", platform: "Barclays SI", ter: "0.40%" }, { ticker: "AERO", name: "Invesco Aerospace & Defence UCITS ETF", desc: "Defence tilt but includes launch & satellite names.", platform: "Barclays SI", ter: "0.35%" }, ], risks: [ "Cash burn — most space pure plays are still pre-profitability.", "Launch failures or constellation delays cause 30%+ single-day moves.", "SpaceX (private) dominates launch economics and could undercut commercial peers.", ],
+    enablers: [
+      "US data centre electricity demand forecast to double by 2030",
+      "Nuclear PPA signings (Microsoft, Google, Amazon) re-rating utility valuations",
+      "Grid transformer lead times of 4+ years creating multi-year revenue visibility",
+    ]}, { id: "quantum", label: "Headwind", labelColor: "#dc2626", labelBg: "#fee2e2", title: "Quantum", subtitle: "The longest-duration trade", risk: "Extreme", riskDots: 5, broadGroup: "tech", coreGroup: false, thesis: "Quantum computing is moving from research curiosity to early commercial pilots with governments and pharma. Highly speculative, but the leaders are accumulating IP moats that will matter in the 2030s.", stocks: [ { ticker: "RGTI", name: "Rigetti Computing, Inc.", desc: "Superconducting qubit pure-play; modular architecture bet.", ytd: "+8.2%", price: "$25.54", mktCap: "$8.49B" }, { ticker: "QBTS", name: "D-Wave Quantum Inc.", desc: "Annealing-based quantum systems, commercial-first approach.", ytd: "+7.2%", price: "$30.14", mktCap: "$11.17B" }, { ticker: "IONQ", name: "IonQ, Inc.", desc: "Trapped-ion leader, highest fidelity qubits, DoD & cloud partners.", ytd: "+54.1%", price: "$72.07", mktCap: "$26.90B" }, ], etfs: [ { ticker: "QTUM", name: "Defiance Quantum ETF (USD)", desc: "Only listed quantum-focused ETF. Holds IONQ, RGTI, QBTS directly. USD via international dealing.", platform: "Barclays SI (Intl)", ter: "0.40%" }, { ticker: "XAIX", name: "Xtrackers AI & Big Data UCITS ETF", desc: "Partial exposure via AI hardware basket as a UCITS alternative.", platform: "Barclays SI", ter: "0.35%" }, ], risks: [ "Pre-revenue or near-zero revenue — pure narrative trade for most names.", "Fundamental physics risk: error correction at scale is still unproven.", "Big tech (Google, IBM, Microsoft) may commoditise quantum-as-a-service.", ],
+    enablers: [
+      "Government R&D spending: US $800M, EU €1B+ committed through 2027",
+      "Pharma and logistics sectors running early commercial pilots",
+      "IP moat accumulation — patent filings growing 40% year-on-year",
+    ],
+    enablers: [
+      "Reusable launch reducing cost-to-orbit by 10x vs 2015 baseline",
+      "Direct-to-device satellite broadband opening $100B+ unserved addressable market",
+      "Government constellation contracts (DoD, ESA) providing revenue floor",
+    ]}, { id: "entertainment", label: "Contrarian", labelColor: "#7c3aed", labelBg: "#f5f3ff", title: "Experiences", subtitle: "The anti-AI trade", risk: "Moderate", riskDots: 2, broadGroup: "consumer", coreGroup: true, thesis: "AI can write songs, generate images, and simulate conversations — but it cannot replicate the visceral reality of 80,000 people at a concert. Post-pandemic, consumer psychology has structurally shifted toward experiences over possessions.", stocks: [ { ticker: "LYV", name: "Live Nation Entertainment, Inc.", desc: "Vertically integrated live entertainment monopoly — venues, ticketing (Ticketmaster), artist management.", ytd: "+18.2%", price: "$142.50", mktCap: "$32.8B" }, { ticker: "DIS", name: "The Walt Disney Company", desc: "Theme parks (60%+ of operating profit), cruise lines, ESPN live sport. Irreplaceable physical IP.", ytd: "+5.4%", price: "$111.30", mktCap: "$203.4B" }, { ticker: "MGM", name: "MGM Resorts International", desc: "Las Vegas strip resort-casino operator; BetMGM digital complements physical experience moat.", ytd: "+12.1%", price: "$37.80", mktCap: "$11.2B" }, { ticker: "SEAS", name: "SeaWorld Entertainment, Inc.", desc: "Regional theme park operator; capacity constrained, pricing power evident in EBITDA margins.", ytd: "+8.9%", price: "$41.20", mktCap: "$2.1B" }, { ticker: "MSGE", name: "Madison Square Garden Entertainment", desc: "MSG Sphere Las Vegas + NYC venues. Immersive experience format commanding $1,000+ ticket prices.", ytd: "+22.4%", price: "$38.60", mktCap: "$1.8B" }, ], etfs: [ { ticker: "ISPY", name: "iShares S&P 500 Consumer Discretionary UCITS ETF", desc: "Captures DIS, LYV, MGM within consumer disc basket. Cheapest UK route to US entertainment majors. ISA eligible.", platform: "Barclays SI", ter: "0.15%" }, { ticker: "HANZ", name: "WisdomTree Global ex-EM Consumer Disc UCITS ETF", desc: "Global consumer discretionary — includes European leisure names (DUFRY, Accor) alongside US.", platform: "Barclays SI", ter: "0.38%" }, ], risks: [ "Consumer recession risk — experiences are discretionary; spending collapses in downturns faster than essentials.", "Regulatory: Live Nation faces ongoing DOJ antitrust investigation into Ticketmaster monopoly.", "Content strike risk (SAG-AFTRA, WGA) can disrupt Disney IP pipeline and streaming margins.", "Demographic shift — Gen Z streams more, attends less; long-term attendance trends uncertain.", ],
+    enablers: [
+      "Post-pandemic 'experience premium' structural shift in consumer spending",
+      "Live event pricing power: Taylor Swift Eras Tour generated $2.1B revenue",
+      "AI content saturation increasing scarcity value of authentic live experiences",
+    ], }, { id: "cybersecurity", label: "Trending", labelColor: "#16a34a", labelBg: "#dcfce7", title: "Cybersecurity", subtitle: "The attack surface never shrinks", risk: "Elevated", riskDots: 3, broadGroup: "tech", coreGroup: false, thesis: "Enterprise security budgets are expanding as ransomware attacks surge and AI-powered threats proliferate, forcing CIOs to prioritize zero-trust architecture and identity management. Federal mandates and cloud migration accelerate demand for endpoint detection, SIEM platforms, and identity verification tools.", stocks: [ { ticker: "CRWD", name: "CrowdStrike Holdings, Inc.", desc: "Cloud-native endpoint protection; Falcon platform with AI-driven threat detection. 25,000+ customers.", ytd: "+28.4%", price: "$382.50", mktCap: "$94.2B" }, { ticker: "PANW", name: "Palo Alto Networks, Inc.", desc: "Zero-trust network security leader; platformisation strategy driving consolidation wins.", ytd: "+14.2%", price: "$185.30", mktCap: "$124.1B" }, { ticker: "ZS", name: "Zscaler, Inc.", desc: "SASE pioneer; secure cloud access for remote workforces. Sticky ARR model.", ytd: "+22.1%", price: "$210.40", mktCap: "$31.8B" }, { ticker: "S", name: "SentinelOne, Inc.", desc: "AI-native cybersecurity platform; unified XDR competing directly with CrowdStrike.", ytd: "+18.7%", price: "$24.60", mktCap: "$7.8B" }, { ticker: "NET", name: "Cloudflare, Inc.", desc: "Zero-trust network edge platform; DDoS protection, SASE and secure access for enterprises globally.", ytd: "+31.2%", price: "$118.40", mktCap: "$39.2B" }, ], etfs: [ { ticker: "IDIG", name: "iShares Digitalisation UCITS ETF", desc: "Broad digital transformation including cybersecurity names.", platform: "Barclays SI", ter: "0.40%" }, { ticker: "CIBR", name: "First Trust NASDAQ Cybersecurity ETF (USD)", desc: "Pure-play cybersecurity index. Holds CRWD, PANW, ZS directly.", platform: "Barclays SI (Intl)", ter: "0.60%" }, ], risks: [ "CrowdStrike's July 2024 outage showed concentration risk — a bad update can trigger mass churn.", "AI-generated malware democratises attacks but also cuts vendor differentiation.", "Platform consolidation by PANW/CRWD pressures smaller pure-plays on price.", ],
+    enablers: [
+      "Ransomware attacks up 73% YoY — enterprise security budgets counter-cyclical",
+      "Zero-trust mandates from US federal government driving platform replacement",
+      "AI-powered threat detection creating new product cycle for incumbents",
+    ], }, { id: "real-estate", label: "Contrarian", labelColor: "#7c3aed", labelBg: "#f5f3ff", title: "Real Estate", subtitle: "Rate cuts + data centres = dual catalyst", risk: "Moderate", riskDots: 2, broadGroup: "financials", coreGroup: true, thesis: "REITs were the worst-performing asset class in the 2022–23 rate hiking cycle. As rates normalise, two structural tailwinds converge: cap rate compression and data centre REIT demand from AI hyperscalers.", stocks: [ { ticker: "DLR", name: "Digital Realty Trust, Inc.", desc: "Global data centre REIT; landlord to AWS, Google, Microsoft. AI demand driving record pre-leasing.", ytd: "+14.8%", price: "$158.40", mktCap: "$47.2B" }, { ticker: "EQIX", name: "Equinix, Inc.", desc: "Largest global data centre operator; 260 IBX facilities. Network-dense interconnection moat.", ytd: "+9.2%", price: "$812.30", mktCap: "$72.8B" }, { ticker: "SGRO", name: "SEGRO plc (LSE: SGRO)", desc: "UK/European industrial REIT. Data centre land banking plus last-mile logistics. GBP-denominated.", ytd: "+6.1%", price: "£8.82", mktCap: "£10.4B" }, { ticker: "LAND", name: "Land Securities Group plc", desc: "UK commercial property recovery play; West End retail and mixed-use London estates.", ytd: "+4.2%", price: "£6.15", mktCap: "£4.6B" }, ], etfs: [ { ticker: "IWDP", name: "iShares Developed Markets Property Yield UCITS ETF", desc: "Broad global REIT exposure including DLR, EQIX, and UK names. ISA eligible.", platform: "Barclays SI", ter: "0.59%" }, { ticker: "PPTY", name: "L&G UK Property UCITS ETF", desc: "Direct UK real estate; commercial, retail, industrial REITs. GBP-denominated.", platform: "Barclays SI", ter: "0.40%" }, ], risks: [ "Rate sensitivity — REITs are long-duration; any repricing of rate-cut expectations compresses multiples.", "Office vacancy rates remain elevated — secondary office REITs face structural impairment.", "Data centre REITs trade at premium multiples already reflecting AI demand; power delivery execution risk.", ],
+    enablers: [
+      "Rate normalisation compressing cap rates and rereating REIT multiples",
+      "Data centre pre-leasing at record levels — DLR 500MW hyperscaler pipeline",
+      "UK industrial REIT undersupply as nearshoring logistics demand accelerates",
+    ]}
+];
+// ─── LIVE PRICE HOOK (Yahoo Finance via CORS proxy) ───────────────────────────
+// Fetches latest price + YTD for a list of tickers on mount.
+// Uses allorigins.win to bypass CORS. Data is delayed ~15 min (free tier).
+function useLivePrices(tickers) { const [prices, setPrices] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => { if (!tickers || tickers.length === 0) return;
+    let cancelled = false;
+    const fetchPrices = async () => { setLoading(true);
+      try { const symbols = tickers.join(",");
+        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}&fields=regularMarketPrice,regularMarketChangePercent,marketCap`;
+        const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+        const res = await fetch(proxy);
+        if (!res.ok) return;
+        const outer = await res.json();
+        const data = JSON.parse(outer.contents);
+        const result = data?.quoteResponse?.result || [];
+        if (!cancelled) { const map = {};
+          result.forEach(q => { const pct = q.regularMarketChangePercent;
+            map[q.symbol] = { price: q.regularMarketPrice ? `$${q.regularMarketPrice.toFixed(2)}` : null, ytd: pct != null ? `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%` : null, mktCap: q.marketCap ? formatMktCap(q.marketCap) : null, live: true, };
+          });
+          setPrices(map);
+        }
+      } catch(e) { /* silently fail - show cached data */ }
+      finally { if (!cancelled) setLoading(false); }
+    };
+    fetchPrices();
+    return () => { cancelled = true; };
+  }, [tickers.join(",")]);
+
+  return { prices, loading };
+}
+
+function formatMktCap(v) { if (v >= 1e12) return `$${(v/1e12).toFixed(2)}T`;
+  if (v >= 1e9)  return `$${(v/1e9).toFixed(1)}B`;
+  if (v >= 1e6)  return `$${(v/1e6).toFixed(0)}M`;
+  return `$${v}`;
+}
+
+const riskColour = { 1: "#16a34a", 2: "#65a30d", 3: "#d97706", 4: "#ea580c", 5: "#dc2626" };
+
+function RiskDots({ count, max = 5 }) { const col = riskColour[count] || "#888";
+  return (
+    <div style={{ display:"flex",gap:5,alignItems:"center" }}> {Array.from({ length: max }).map((_, i) => (
+        <div key={i} style={{ width:9,height:9,borderRadius:"50%",background:i < count ? col:"#e2e8f0" }} /> ))}
+    </div> );
+}
+
+function Badge({ label, color, bg }) { return (
+    <span style={{ display:"inline-flex",alignItems:"center",gap:5,background:bg,color,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,letterSpacing:"0.04em",fontFamily:"'DM Mono',monospace"}}> <span style={{ width:6,height:6,borderRadius:"50%",background:color,display:"inline-block" }} /> {label}
+    </span> );
+}
+function ETFCard({ etf }) {
+  return (
+    <div style={{ background:"linear-gradient(135deg,#5c4a32,#7a6348)",border:"1px solid #9e8468",borderRadius:14,padding:"14px 16px",marginBottom:10 }}>
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4 }}>
+        <div>
+          <span style={{ fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:14,color:"#f5eed8" }}>{etf.ticker}</span>
+          <span style={{ marginLeft:8,fontSize:10,background:"#c4aa8a33",color:"#f5eed8",border:"1px solid #c4aa8a66",borderRadius:6,padding:"2px 7px",fontFamily:"'DM Mono',monospace" }}>{etf.platform}</span>
+        </div>
+        <span style={{ fontSize:11,color:"#e8d9c4",fontFamily:"'DM Mono',monospace" }}>TER {etf.ter}</span>
+      </div>
+      <div style={{ fontSize:12,fontWeight:600,color:"#e2e8f0",marginBottom:3 }}>{etf.name}</div>
+      <div style={{ fontSize:11,color:"#c4aa8a",lineHeight:1.5 }}>{etf.desc}</div>
+    </div>
+  );
+}
+function StockCard({ stock, liveData }) { const live = liveData || {};
+  const displayPrice = live.price || stock.price;
+  const displayYtd = live.ytd || stock.ytd;
+  const displayMktCap = live.mktCap || stock.mktCap;
+  const pos = displayYtd ? displayYtd.startsWith("+") : true;
+  return (
+    <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",marginBottom:10 }}> <div style={{ display:"flex",justifyContent:"space-between",marginBottom:2 }}> <span style={{ fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:14,color:"#0f172a" }}>{stock.ticker}</span> <span style={{ fontFamily:"'DM Mono',monospace",fontSize:13,fontWeight:700,color:pos ? "#16a34a":"#dc2626" }}>{stock.ytd}</span> </div> <div style={{ fontSize:12,fontWeight:600,color:"#334155",marginBottom:2 }}>{stock.name}</div> <div style={{ fontSize:11,color:"#64748b",marginBottom:8,lineHeight:1.5 }}>{stock.desc}</div> <div style={{ display:"flex",gap:20,alignItems:"center",flexWrap:"wrap" }}> <div><div style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>PRICE</div><div style={{ fontSize:12,fontWeight:700,color:"#0f172a" }}>{displayPrice}</div></div> <div><div style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>YTD</div><div style={{ fontSize:12,fontWeight:700,color:pos?"#16a34a":"#dc2626" }}>{displayYtd}</div></div> <div><div style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>MKT CAP</div><div style={{ fontSize:12,fontWeight:700,color:"#0f172a" }}>{displayMktCap}</div></div> {live.live && <span style={{ fontSize:9,background:"#dcfce7",color:"#16a34a",borderRadius:4,padding:"2px 5px",fontFamily:"'DM Mono',monospace" }}>LIVE</span>}
+      </div> </div> );
+}
+
+function ThemeDetail({ theme, onBack, onUpdate }) {
+  const [tab, setTab] = useState("overview");
+  const [editing, setEditing] = useState(false);
+  const tabs = ["overview", "etfs", "stocks"];
+  const tickers = (theme.stocks || []).map(s => s.ticker);
+  const { prices = {}, loading: pricesLoading } = useLivePrices(tickers);
+
+  return (
+    <div style={{ animation:"slideIn 0.28s cubic-bezier(.4,0,.2,1)" }}>
+      <style>{`@keyframes slideIn{from{opacity:0;transform:translateX(22px)}to{opacity:1;transform:none}}`}</style>
+
+      {/* Back + Edit row */}
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
+        <button onClick={onBack} style={{ background:"none",border:"none",cursor:"pointer",color:"#64748b",fontSize:14,display:"flex",alignItems:"center",gap:6,fontFamily:"'Sora',sans-serif",padding:0 }}>← Back</button>
+        {onUpdate && (
+          <button onClick={() => setEditing(!editing)} style={{ background:editing?"#dc2626":"#ede8de",color:editing?"#fff":"#5c4a32",border:"none",borderRadius:8,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700 }}>
+            {editing ? "Done" : "Edit"}
+          </button>
+        )}
+      </div>
+
+      {/* Badge + title + subtitle + risk */}
+      <Badge label={theme.label} color={theme.labelColor} bg={theme.labelBg} />
+      <h1 style={{ fontSize:36,fontWeight:800,color:"#0f172a",margin:"8px 0 2px",fontFamily:"'Sora',sans-serif",letterSpacing:"-0.02em" }}>{theme.title}</h1>
+      {editing ? (
+        <div style={{ marginBottom:8 }}>
+          <EditableField value={theme.subtitle} onSave={v => onUpdate(t => ({...t,subtitle:v}))} style={{ fontSize:15,color:"#64748b" }} />
+        </div>
+      ) : (
+        <p style={{ color:"#64748b",fontSize:15,margin:"0 0 12px" }}>{theme.subtitle}</p>
+      )}
+      <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:20 }}>
+        <RiskDots count={theme.riskDots} />
+        <span style={{ fontSize:13,color:riskColour[theme.riskDots],fontWeight:700,fontFamily:"'DM Mono',monospace" }}>{theme.risk} risk</span>
+      </div>
+
+      {/* Thesis */}
+      {editing ? (
+        <div style={{ marginBottom:22 }}>
+          <EditableField value={theme.thesis} multiline onSave={v => onUpdate(t => ({...t,thesis:v}))} style={{ fontSize:16,color:"#1e293b",lineHeight:1.7 }} />
+        </div>
+      ) : (
+        <p style={{ fontSize:16,color:"#1e293b",lineHeight:1.7,marginBottom:22 }}>{theme.thesis}</p>
+      )}
+
+      {/* Tab bar */}
+      <div style={{ display:"flex",gap:0,marginBottom:16,background:"#ede8de",borderRadius:12,padding:4 }}>
+        {tabs.map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{ flex:1,padding:"8px 6px",border:"none",borderRadius:9,background:tab===t?"#fff":"transparent",color:tab===t?"#3d2e1e":"#8c7355",fontWeight:tab===t?700:500,fontSize:11,cursor:"pointer",boxShadow:tab===t?"0 1px 4px #0002":"none",fontFamily:"'DM Mono',monospace",textTransform:"uppercase",letterSpacing:"0.05em" }}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {/* OVERVIEW — enablers + risks */}
+      {tab === "overview" && (
+        <div>
+          {/* Enablers */}
+          {theme.enablers && theme.enablers.length > 0 && (
+            <div style={{ marginBottom:24 }}>
+              <div style={{ fontFamily:"'DM Mono',monospace",fontSize:11,color:"#94a3b8",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10 }}>Rising Forces</div>
+              {theme.enablers.map((e, i) => (
+                <div key={i} style={{ background:"#fff",border:"1px solid #d1fae5",borderLeft:"3px solid #16a34a",borderRadius:12,padding:"10px 14px",marginBottom:8,display:"flex",gap:10,alignItems:"flex-start" }}>
+                  <span style={{ color:"#16a34a",fontSize:13,marginTop:1,flexShrink:0 }}>↑</span>
+                  <span style={{ fontSize:13,color:"#1e293b",lineHeight:1.6 }}>{e}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Risks */}
+          {theme.risks && theme.risks.length > 0 && (
+            <div>
+              <div style={{ fontFamily:"'DM Mono',monospace",fontSize:11,color:"#94a3b8",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10 }}>Risks</div>
+              {theme.risks.map((r, i) => (
+                <div key={i} style={{ background:"#fff",border:"1px solid #fecaca",borderLeft:"3px solid #dc2626",borderRadius:12,padding:"10px 14px",marginBottom:8,display:"flex",gap:10,alignItems:"flex-start" }}>
+                  <span style={{ color:"#dc2626",fontSize:13,marginTop:1,flexShrink:0 }}>↓</span>
+                  <span style={{ fontSize:13,color:"#1e293b",lineHeight:1.6 }}>{r}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {editing && (
+            <div style={{ marginTop:16,padding:"10px 12px",background:"#fef3c7",borderRadius:10,fontSize:11,color:"#92400e" }}>
+              Switch to ETFs or Stocks tab to edit holdings
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ETFs tab */}
+      {tab === "etfs" && (
+        <div>
+          {theme.etfs.length === 0
+            ? <div style={{ textAlign:"center",padding:"24px 0",color:"#94a3b8",fontSize:13 }}>No ETFs added yet</div>
+            : theme.etfs.map(e => <ETFCard key={e.ticker} etf={e} />)
+          }
+        </div>
+      )}
+
+      {/* Stocks tab */}
+      {tab === "stocks" && (
+        <div>
+          {pricesLoading && (
+            <div style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 0",marginBottom:8 }}>
+              <span style={{ display:"inline-block",width:10,height:10,border:"2px solid #16a34a",borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.8s linear infinite" }}/>
+              <span style={{ fontSize:11,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>Fetching live prices...</span>
+            </div>
+          )}
+          {theme.stocks.map((s, i) => (
+            <div key={s.ticker} style={{ position:"relative" }}>
+              <StockCard stock={s} liveData={prices[s.ticker]} />
+              {editing && onUpdate && (
+                <button onClick={() => onUpdate(t => ({...t,stocks:t.stocks.filter((_,j)=>j!==i)}))}
+                  style={{ position:"absolute",top:10,right:10,background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700 }}>
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+          {editing && onUpdate && (
+            <AddStockForm
+              onAdd={s => onUpdate(t => ({...t,stocks:[...t.stocks,s]}))}
+              onCancel={() => {}}
+            />
+          )}
+          {theme.stocks.length === 0 && !editing && (
+            <div style={{ textAlign:"center",padding:"24px 0",color:"#94a3b8",fontSize:13 }}>No stocks — tap Edit to add</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ScenarioTester() { const [active, setActive] = useState(null);
+  const scenario = active ? SCENARIOS[active] : null;
+
+  const scoreBar = (score)=>{ const abs = Math.abs(score);
+    const col = score <= -4 ? "#dc2626" : score <= -2 ? "#ea580c" : score < 0 ? "#d97706" : "#16a34a";
+    const lbl = score <= -4 ? "Catastrophic" : score <= -2 ? "Severe" : score < 0 ? "Moderate" : score >= 2 ? "Tailwind" : "Mild Tailwind";
+    return (
+      <div style={{ display:"flex",alignItems:"center",gap:8 }}> <div style={{ flex:1,height:5,background:"#f1f5f9",borderRadius:3,overflow:"hidden" }}> <div style={{ width:`${(abs/5)*100}%`, height:"100%", background:col, borderRadius:3 }} /> </div> <span style={{ fontSize:10,fontFamily:"'DM Mono',monospace",color:col,fontWeight:700,width:80,textAlign:"right" }}> {score > 0 ? "▲" : "▼"} {lbl}
+        </span> </div> );
+  };
+
+  return (
+    <div style={{ marginBottom:28 }}> <div style={{ fontFamily:"'DM Mono',monospace",fontSize:10,color:"#94a3b8",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10 }}> Scenario Stress Test
+      </div> <div style={{ display:"flex",gap:8,marginBottom:14 }}> {Object.values(SCENARIOS).map(s => (
+          <button key={s.id} onClick={() => setActive(active === s.id ? null : s.id)} style={{ flex: 1, padding: "12px 10px", border: `2px solid ${active === s.id ? s.color : "#e2e8f0"}`, borderRadius: 14, background: active === s.id ? s.bg : "#fff", cursor: "pointer", transition: "all 0.18s", textAlign: "left"
+          }}> <div style={{ fontSize:18,marginBottom:4 }}>{s.icon}</div> <div style={{ fontSize:12,fontWeight:700,color:active === s.id ? s.color:"#0f172a",fontFamily:"'Sora',sans-serif",lineHeight:1.3 }}>{s.title}</div> <div style={{ fontSize:10,color:"#64748b",marginTop:2 }}>{s.subtitle}</div> </button> ))}
+      </div> {scenario && (
+        <div style={{ background: "#fff", border: `1px solid ${scenario.color}33`, borderRadius: 16, padding: 16, animation: "fadeIn 0.2s ease" }}> <style>{`@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}`}</style> <div style={{ fontSize:13,color:"#475569",lineHeight:1.6,marginBottom:16,fontStyle:"italic" }}>{scenario.description}</div> <div style={{ fontFamily:"'DM Mono',monospace",fontSize:10,color:"#94a3b8",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10 }}>Theme Impact Ranking</div> {themes
+            .sort((a, b) => scenario.impacts[a.id].score - scenario.impacts[b.id].score)
+            .map(t=>{ const imp = scenario.impacts[t.id];
+              return (
+                <div key={t.id} style={{ marginBottom:12 }}> <div style={{ display:"flex",justifyContent:"space-between",marginBottom:4 }}> <span style={{ fontSize:13,fontWeight:700,color:"#0f172a",fontFamily:"'Sora',sans-serif" }}>{t.title}</span> </div> {scoreBar(imp.score)}
+                  <div style={{ fontSize:11,color:"#64748b",marginTop:4,lineHeight:1.5 }}>{imp.detail}</div> </div> );
+            })}
+          <div style={{ marginTop:8,padding:"8px 10px",background:"#f8fafc",borderRadius:8,fontSize:10,color:"#94a3b8" }}> Scenario analysis for illustrative purposes only. Not investment advice.
+          </div> </div> )}
+    </div> );
+}
+function ThemeCard({ theme, onClick, editMode, onUpdate, onDelete }) { const best = theme.stocks.length > 0
+    ? theme.stocks.reduce((a, b) => parseFloat(b.ytd) > parseFloat(a.ytd) ? b : a)
+    : null;
+  const newsCount = (NEWS_BY_THEME[theme.id] || []).length;
+
+  return (
+    <div style={{ background:editMode ? "#fffbeb":"#fff",border:editMode ? "2px dashed #fbbf24":"1px solid #e2e8f0",borderRadius:20,padding:"18px 18px 14px",marginBottom:14,cursor:editMode ? "default":"pointer",transition:"box-shadow 0.18s,transform 0.18s",boxShadow:"0 1px 4px #0001"}}
+    onClick={!editMode ? onClick : undefined}
+    onMouseEnter={e=>{ if (!editMode) { e.currentTarget.style.boxShadow = "0 6px 24px #0f172a18"; e.currentTarget.style.transform = "translateY(-2px)"; }}}
+    onMouseLeave={e=>{ e.currentTarget.style.boxShadow = "0 1px 4px #0001"; e.currentTarget.style.transform = "none"; }}
+    > <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 }}> <Badge label={theme.label} color={theme.labelColor} bg={theme.labelBg} /> <div style={{ display:"flex",gap:6,alignItems:"center" }}> {editMode && (
+            <button onClick={e=>{ e.stopPropagation(); onDelete(); }}
+              style={{ background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"3px 9px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700 }}> Delete
+            </button> )}
+          {!editMode && newsCount > 0 && <span style={{ fontSize:10,background:"#fee2e2",color:"#dc2626",borderRadius:6,padding:"2px 7px",fontFamily:"'DM Mono',monospace" }}> {newsCount}</span>}
+          {!editMode && <span style={{ fontSize:18,color:"#cbd5e1" }}>↗</span>}
+          {editMode && <span style={{ fontSize:10,background:"#fef3c7",color:"#92400e",borderRadius:6,padding:"2px 8px",fontFamily:"'DM Mono',monospace" }}>editing</span>}
+        </div> </div> {editMode ? (
+        <div> <EditableField value={theme.title} placeholder="Theme title"
+            onSave={v => onUpdate(t => ({ ...t, title: v }))}
+            style={{ fontSize:22,fontWeight:800,color:"#0f172a",fontFamily:"'Sora',sans-serif",display:"block",marginBottom:4 }} /> <EditableField value={theme.subtitle} placeholder="Subtitle tagline"
+            onSave={v => onUpdate(t => ({ ...t, subtitle: v }))}
+            style={{ fontSize:13,color:"#64748b" }} /> <div style={{ fontSize:10,color:"#94a3b8",marginTop:8,fontFamily:"'DM Mono',monospace" }}> Tap any underlined text to edit · Open theme to edit stocks & thesis
+          </div> </div> ) : (
+        <> <h2 style={{ fontSize:24,fontWeight:800,color:"#0f172a",margin:"0 0 3px",fontFamily:"'Sora',sans-serif",letterSpacing:"-0.02em" }}>{theme.title}</h2> <p style={{ color:"#64748b",fontSize:13,margin:"0 0 12px" }}>{theme.subtitle}</p> </> )}
+
+      <div style={{ display:"flex",flexWrap:"wrap",gap:6,marginBottom:12 }}> {theme.stocks.map(s => (
+          <span key={s.ticker} style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"3px 9px",fontSize:11,fontFamily:"'DM Mono',monospace",fontWeight:700,color:"#334155" }}>{s.ticker}</span> ))}
+        <span style={{ background:"#6b5240",border:"1px solid #9e8468",borderRadius:8,padding:"3px 9px",fontSize:11,fontFamily:"'DM Mono',monospace",fontWeight:700,color:"#8c7355" }}>+{theme.etfs.length} ETFs</span> </div> {best && (
+        <div style={{ borderTop:"1px solid #f1f5f9",paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center" }}> <span style={{ fontFamily:"'DM Mono',monospace",fontSize:11,color:"#94a3b8" }}>{best.ticker} · YTD</span> <span style={{ fontFamily:"'DM Mono',monospace",fontSize:16,fontWeight:700,color:parseFloat(best.ytd) >= 0 ? "#16a34a":"#dc2626" }}>{best.ytd}</span> </div> )}
+    </div> );
+}
+function FTAnalyser({ analysedArticles, onNewArticle }) { const [mode, setMode] = useState("feed");
+  const [inputMode, setInputMode] = useState("text");
+  const [urlInput, setUrlInput] = useState("");
+  const [articleText, setArticleText] = useState("");
+  const [articleTitle, setArticleTitle] = useState("");
+  const [fetchStatus, setFetchStatus] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const themeNames = themes.map(t => t.title).join(", ");
+  const isUrl = s => s.trim().startsWith("http");
+
+  const fetchFromUrl = async ()=>{ if (!urlInput.trim()) return;
+    setFetchStatus("fetching"); setError(null);
+    try { const res = await fetch("https://api.allorigins.win/get?url=" + encodeURIComponent(urlInput.trim()));
+      if (!res.ok) throw new Error("Proxy fetch failed: " + res.status);
+      const data = await res.json();
+      const html = data.contents || "";
+      const stripped = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi," ").replace(/<style[^>]*>[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&amp;/g,"&").replace(/&nbsp;/g," ").replace(/\s{2}/g," ").trim();
+      if (stripped.length < 200) throw new Error("Could not extract text — try paste mode.");
+      const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      if (titleM && !articleTitle) setArticleTitle(titleM[1].replace(/ \| Financial Times/,"").replace(/ - FT\.com/,"").trim());
+      setArticleText(stripped.slice(0, 4000));
+      setFetchStatus("fetched");
+    } catch(e) { setFetchStatus("error"); setError("Fetch failed: " + e.message); }
+  };
+
+  const canAnalyse = articleText.trim().length >= 100;
+
+  const analyseArticle = async ()=>{ if (!canAnalyse) { setError("Need at least 100 characters."); return; }
+    setError(null); setLoading(true);
+    const prompt = "You are a senior equity analyst. Analyse this article.\nInvestment themes: " + themeNames + "\nRespond ONLY with valid JSON (no markdown). Schema: {headline, summary, keyThemes[], source, sentiment, themeImpacts:[{themeTitle, impact, impactScore, reasoning}]}\nsentiment=bullish|bearish|neutral, impactScore=-3 to +3, omit 0-score themes.\n\n" + (articleTitle ? "TITLE: " + articleTitle + "\n" : "") + "TEXT:\n" + articleText.slice(0, 3000);
+    try { const res = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1200, messages:[{role:"user",content:prompt}] })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.type+": "+data.error.message);
+      if (!data.content?.[0]?.text) throw new Error("Empty response. Keys: "+Object.keys(data).join(","));
+      const raw = data.content[0].text.trim();
+      const s = raw.indexOf("{"), e2 = raw.lastIndexOf("}");
+      if (s === -1) throw new Error("No JSON found. Got: "+raw.slice(0,200));
+      const parsed = JSON.parse(raw.slice(s, e2+1));
+      if (!parsed.headline) throw new Error("Missing headline. Keys: "+Object.keys(parsed).join(","));
+      onNewArticle({ ...parsed, source:"FT", id:Date.now(), addedAt:new Date().toISOString(), sourceUrl: isUrl(urlInput)?urlInput:null });
+      setUrlInput(""); setArticleText(""); setArticleTitle(""); setFetchStatus(null); setMode("feed");
+    } catch(err) { setError("Error: "+(err.message||String(err))); }
+    finally { setLoading(false); }
+  };
+
+  const impactColour = score => score >= 2 ? {text:"#16a34a",bg:"#dcfce7",label:"▲ Bullish"} : score===1 ? {text:"#65a30d",bg:"#f0fdf4",label:"▲ Mild Bullish"} : score===0 ? {text:"#64748b",bg:"#f1f5f9",label:"→ Neutral"} : score===-1 ? {text:"#d97706",bg:"#fef3c7",label:"▼ Mild Bearish"} : {text:"#dc2626",bg:"#fee2e2",label:"▼ Bearish"};
+
+  return (
+    <div style={{ marginBottom:28 }}> <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}> <div style={{ fontFamily:"'DM Mono',monospace",fontSize:10,color:"#94a3b8",letterSpacing:"0.1em",textTransform:"uppercase" }}> FT Intelligence Feed {analysedArticles.length > 0 && <span style={{ marginLeft:8,background:"#dc2626",color:"#fff",borderRadius:10,padding:"1px 7px",fontSize:10 }}>{analysedArticles.length}</span>}
+        </div> <button onClick={()=>{ setMode(mode==="input"?"feed":"input"); setError(null); }} style={{ background:mode==="input"?"#6b5240":"#f1f5f9",color:mode==="input"?"#fff":"#5c4a32",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700 }}> {mode==="input"?"Cancel":"Add Article"}
+        </button> </div> {mode==="input" && (
+        <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:14,marginBottom:14,animation:"fadeIn 0.2s ease" }}> <div style={{ display:"flex",background:"#f1f5f9",borderRadius:10,padding:3,marginBottom:12 }}> {[{id:"url",label:" Gift Link"},{id:"text",label:"Paste Text"}].map(m => (
+              <button key={m.id} onClick={()=>{ setInputMode(m.id); setError(null); setFetchStatus(null); }} style={{ flex:1,padding:"7px",border:"none",borderRadius:8,background:inputMode===m.id?"#fff":"transparent",color:inputMode===m.id?"#3d2e1e":"#8c7355",fontWeight:inputMode===m.id?700:500,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",boxShadow:inputMode===m.id?"0 1px 3px #0002":"none" }}>{m.label}</button> ))}
+          </div> {inputMode==="url" && (
+            <div> <div style={{ fontSize:11,color:"#64748b",marginBottom:8 }}>Paste an FT gift link or any article URL.</div> <div style={{ display:"flex",gap:8,marginBottom:8 }}> <input value={urlInput} onChange={e=>{ setUrlInput(e.target.value); setFetchStatus(null); setArticleText(""); }} placeholder="https://ft.com/content/…"
+                  style={{ flex:1,padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:12,outline:"none",background:"#f8fafc",fontFamily:"'Sora',sans-serif" }} /> <button onClick={fetchFromUrl} disabled={!urlInput.trim()||fetchStatus==="fetching"} style={{ background:fetchStatus==="fetched"?"#16a34a":"#6b5240",color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700 }}> {fetchStatus==="fetching"?"⏳":fetchStatus==="fetched"?"":"Fetch"}
+                </button> </div> {fetchStatus==="fetched" && <div style={{ padding:"7px 11px",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:8,fontSize:11,color:"#15803d",marginBottom:8 }}> {articleText.length} chars extracted{articleTitle?" — "+articleTitle.slice(0,50):""}</div>}
+            </div> )}
+
+          {inputMode==="text" && (
+            <div> <input value={articleTitle} onChange={e => setArticleTitle(e.target.value)} placeholder="Headline (optional)"
+                style={{ width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:12,marginBottom:8,outline:"none",background:"#f8fafc",fontFamily:"'Sora',sans-serif" }} /> <textarea value={articleText} onChange={e => setArticleText(e.target.value)} placeholder="Paste article text here…" rows={6}
+                style={{ width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:12,resize:"vertical",outline:"none",background:"#f8fafc",lineHeight:1.5,fontFamily:"'Sora',sans-serif" }} /> <div style={{ fontSize:10,color:"#94a3b8",marginTop:3 }}>{articleText.length} chars</div> </div> )}
+
+          <div style={{ display:"flex",justifyContent:"flex-end",marginTop:10 }}> <button onClick={analyseArticle} disabled={loading||!canAnalyse} style={{ background:(loading||!canAnalyse)?"#94a3b8":"#6b5240",color:"#fff",border:"none",borderRadius:9,padding:"10px 20px",fontSize:13,cursor:(loading||!canAnalyse)?"not-allowed":"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}> {loading ? <><span style={{ display:"inline-block",width:12,height:12,border:"2px solid #fff",borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.8s linear infinite" }}/> Analysing…</> : "Analyse with Claude"}
+            </button> </div> {error && <div style={{ marginTop:8,padding:"9px 11px",background:"#fee2e2",borderRadius:8,fontSize:11,color:"#dc2626",lineHeight:1.5,wordBreak:"break-word",fontFamily:"monospace" }}>{error}</div>}
+          <div style={{ marginTop:8,fontSize:10,color:"#94a3b8" }}>URL mode uses allorigins.win CORS proxy. If it fails, use paste mode.</div> </div> )}
+
+      {mode==="feed" && analysedArticles.length===0 && (
+        <div style={{ background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:16,padding:"28px 16px",textAlign:"center" }}> <div style={{ fontSize:28,marginBottom:6 }}></div> <div style={{ fontSize:13,fontWeight:700,color:"#334155",marginBottom:4 }}>No articles yet</div> <div style={{ fontSize:12,color:"#e8d9c4",lineHeight:1.5 }}>Add an FT article via gift link or paste the text. Claude maps the impact to each investment theme.</div> </div> )}
+      {mode==="feed" && analysedArticles.length>0 && <div>{analysedArticles.map(a => <ArticleCard key={a.id} article={a} impactColour={impactColour} />)}</div>}
+    </div> );
+}
+
+
+function ArticleCard({ article, impactColour }) { const [expanded, setExpanded] = useState(false);
+  const ss = article.sentiment==="bullish" ? {color:"#16a34a",bg:"#dcfce7",label:"▲ Bullish"} : article.sentiment==="bearish" ? {color:"#dc2626",bg:"#fee2e2",label:"▼ Bearish"} : {color:"#64748b",bg:"#f1f5f9",label:"→ Neutral"};
+  const dt = new Date(article.addedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+  return (
+    <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"14px 16px",marginBottom:12 }}> <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8 }}> <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}> <span style={{ background:"#fef3c7",color:"#92400e",borderRadius:6,padding:"2px 8px",fontSize:10,fontFamily:"'DM Mono',monospace",fontWeight:700 }}>FT</span> <span style={{ background:ss.bg,color:ss.color,borderRadius:6,padding:"2px 8px",fontSize:10,fontFamily:"'DM Mono',monospace",fontWeight:700 }}>{ss.label}</span> </div> <span style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>{dt}</span> </div> <div style={{ fontSize:14,fontWeight:700,color:"#0f172a",lineHeight:1.4,marginBottom:6 }}>{article.headline}</div> <div style={{ fontSize:12,color:"#475569",lineHeight:1.6,marginBottom:8 }}>{article.summary}</div> <div style={{ display:"flex",flexWrap:"wrap",gap:5,marginBottom:8 }}> {(article.keyThemes||[]).map((t,i) => <span key={i} style={{ background:"#f0f9ff",border:"1px solid #bae6fd",color:"#0369a1",borderRadius:6,padding:"2px 8px",fontSize:10,fontFamily:"'DM Mono',monospace" }}>{t}</span>)}
+      </div> {article.themeImpacts?.length > 0 && (
+        <div> <button onClick={() => setExpanded(!expanded)} style={{ width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",cursor:"pointer",display:"flex",justifyContent:"space-between",fontFamily:"'DM Mono',monospace",fontSize:11,color:"#334155" }}> <span> Theme impacts ({article.themeImpacts.length})</span> <span>{expanded?"▲ Hide":"▼ Show"}</span> </button> {expanded && (
+            <div style={{ marginTop:6 }}> {article.themeImpacts.sort((a,b)=>Math.abs(b.impactScore)-Math.abs(a.impactScore)).map((imp,i)=>{ const col = impactColour(imp.impactScore);
+                return (
+                  <div key={i} style={{ padding:"9px 11px", background:col.bg, borderRadius:9, marginBottom:5, border:`1px solid ${col.text}22` }}> <div style={{ display:"flex",justifyContent:"space-between",marginBottom:3 }}> <span style={{ fontSize:12,fontWeight:700,color:"#0f172a" }}>{imp.themeTitle}</span> <span style={{ fontSize:11,fontWeight:700,color:col.text,fontFamily:"'DM Mono',monospace" }}>{col.label}</span> </div> <div style={{ fontSize:11,color:"#475569",lineHeight:1.4 }}>{imp.reasoning}</div> </div> );
+              })}
+            </div> )}
+        </div> )}
+    </div> );
+}
+
+
+function EditableField({ value, onSave, multiline, style, placeholder }) { const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  if (!editing) return (
+    <span onClick={()=>{ setDraft(value); setEditing(true); }}
+      title="Click to edit"
+      style={{ ...style,cursor:"text",borderBottom:"1px dashed #cbd5e1",display:"inline" }}> {value || placeholder}
+    </span> );
+  return multiline ? (
+    <div> <textarea value={draft} onChange={e => setDraft(e.target.value)} autoFocus
+        rows={4} style={{ width:"100%",padding:"6px 8px",borderRadius:8,border:"1px solid #38bdf8",fontSize:"inherit",fontFamily:"inherit",lineHeight:1.6,outline:"none",resize:"vertical" }} /> <div style={{ display:"flex",gap:6,marginTop:4 }}> <button onClick={()=>{ onSave(draft); setEditing(false); }}
+          style={{ background:"#6b5240",color:"#fff",border:"none",borderRadius:6,padding:"4px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace" }}>Save</button> <button onClick={() => setEditing(false)}
+          style={{ background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer" }}>Cancel</button> </div> </div> ) : (
+    <div style={{ display:"flex",gap:6,alignItems:"center" }}> <input value={draft} onChange={e => setDraft(e.target.value)} autoFocus
+        style={{ flex:1,padding:"5px 8px",borderRadius:8,border:"1px solid #38bdf8",fontSize:"inherit",fontFamily:"inherit",outline:"none" }} /> <button onClick={()=>{ onSave(draft); setEditing(false); }}
+        style={{ background:"#6b5240",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer" }}></button> <button onClick={() => setEditing(false)}
+        style={{ background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:6,padding:"4px 8px",fontSize:11,cursor:"pointer" }}></button> </div> );
+}
+function AddStockForm({ onAdd, onCancel }) { const [form, setForm] = useState({ ticker:"", name:"", desc:"", ytd:"", price:"", mktCap:"" });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const valid = form.ticker.trim() && form.name.trim();
+
+  return (
+    <div style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,padding:14,marginBottom:10 }}> <div style={{ fontSize:12,fontWeight:700,color:"#0f172a",marginBottom:10 }}>+ Add Security</div> {[["ticker","Ticker (e.g. NVDA)"],["name","Full company name"],["desc","One-line description"], ["ytd","YTD return (e.g. +24.5%)"],["price","Price (e.g. $142.50)"],["mktCap","Mkt Cap (e.g. $32B)"]].map(([k,ph]) => (
+        <input key={k} value={form[k]} onChange={e => set(k, e.target.value)} placeholder={ph}
+          style={{ width:"100%",padding:"8px 10px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12,fontFamily:"'Sora',sans-serif",marginBottom:7,outline:"none",background:"#fff" }} /> ))}
+      <div style={{ display:"flex",gap:8 }}> <button onClick={() => valid && onAdd(form)} disabled={!valid}
+          style={{ background:valid ? "#6b5240":"#94a3b8",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontSize:12,cursor:valid ? "pointer":"not-allowed",fontFamily:"'DM Mono',monospace",fontWeight:700 }}>Add</button> <button onClick={onCancel}
+          style={{ background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 12px",fontSize:12,cursor:"pointer" }}>Cancel</button> </div> </div> );
+}
+const BROAD_GROUPS = [ { id: "all", label: "All" }, { id: "core", label: "Core" }, { id: "tech", label: "Tech" }, { id: "consumer", label: "Consumer" }, { id: "energy", label: "Energy" }, { id: "financials", label: "Financials" }, { id: "defence", label: "Defence" },
+];
+
+function FilterBar({ active, onChange }) { return (
+    <div style={{ overflowX:"auto",display:"flex",gap:6,paddingBottom:4,marginBottom:14 }}> {BROAD_GROUPS.map(g => (
+        <button key={g.id} onClick={() => onChange(g.id)} style={{ whiteSpace:"nowrap",padding:"6px 13px",border:"none",borderRadius:20,background:active === g.id ? "#6b5240":"#ede8de",color:active === g.id ? "#fff":"#8c7355",fontSize:12,fontWeight:active === g.id ? 700:500,cursor:"pointer",fontFamily:"'DM Mono',monospace",transition:"all 0.15s",flexShrink:0}}>{g.label}</button> ))}
+    </div> );
+}
+function AddThemeForm({ onAdd, onCancel }) { const [title, setTitle] = useState("");
+  const [subtitle, setSubtitle] = useState("");
+  const [thesis, setThesis] = useState("");
+  const [broadGroup, setBroadGroup] = useState("tech");
+  const [coreGroup, setCoreGroup] = useState(false);
+  const valid = title.trim() && thesis.trim();
+  const inp = (val, set, ph) => (
+    <input value={val} onChange={e => set(e.target.value)} placeholder={ph}
+      style={{ width:"100%",padding:"8px 10px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12,fontFamily:"'Sora',sans-serif",marginBottom:8,outline:"none",background:"#f8fafc" }} /> );
+  return (
+    <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:14,marginBottom:14 }}> <div style={{ fontSize:13,fontWeight:700,color:"#0f172a",marginBottom:10 }}>+ New Theme</div> {inp(title, setTitle, "Theme name")}
+      {inp(subtitle, setSubtitle, "Tagline")}
+      <textarea value={thesis} onChange={e => setThesis(e.target.value)} placeholder="Investment thesis..." rows={3}
+        style={{ width:"100%",padding:"8px 10px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12,marginBottom:8,outline:"none",resize:"vertical",lineHeight:1.5,background:"#f8fafc",fontFamily:"'Sora',sans-serif" }} /> <div style={{ display:"flex",gap:8,marginBottom:10 }}> <select value={broadGroup} onChange={e => setBroadGroup(e.target.value)}
+          style={{ flex:1,padding:"8px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12,outline:"none",background:"#f8fafc" }}> {["tech","consumer","energy","financials","defence","healthcare"].map(g => <option key={g} value={g}>{g}</option>)}
+        </select> <label style={{ display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#475569" }}> <input type="checkbox" checked={coreGroup} onChange={e => setCoreGroup(e.target.checked)} /> Core
+        </label> </div> <div style={{ display:"flex",gap:8 }}> <button onClick={() => valid && onAdd({ id: title.toLowerCase().replace(/[^a-z0-9]/g,"-"), title, subtitle, thesis, broadGroup, coreGroup, stocks:[], etfs:[], risks:[], risk:"Moderate", riskDots:2, label:"Catalyst", labelColor:"#d97706", labelBg:"#fef3c7" })}
+          disabled={!valid} style={{ background:valid?"#0f172a":"#94a3b8",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontSize:12,cursor:valid?"pointer":"not-allowed",fontFamily:"'DM Mono',monospace",fontWeight:700 }}> Create
+        </button> <button onClick={onCancel} style={{ background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"8px 12px",fontSize:12,cursor:"pointer" }}>Cancel</button> </div> </div> );
+}
+
+
+
+function PortfolioTracker() { const [holdings, setHoldings] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState(null);
+  const [view, setView] = useState("holdings");
+
+  const handleImage = async (e) => { const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true); setError(null);
+    try { const base64 = await new Promise((res, rej) => { const r = new FileReader();
+        r.onload = () => res(r.result.split(",")[1]);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      const prompt = "Analyse this investment portfolio screenshot. Extract every holding and respond ONLY with a JSON array, no markdown. Each item: {ticker, name, shares, avgCost, currentValue, gainLoss, currency}. Use empty string for missing fields.";
+      const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1500, messages: [{ role: "user", content: [ { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } }, { type: "text", text: prompt }
+          ]}]
+        })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.type + ": " + data.error.message);
+      if (!data.content?.[0]?.text) throw new Error("Empty response");
+      const raw = data.content[0].text.trim();
+      const s = raw.indexOf("["), e2 = raw.lastIndexOf("]");
+      if (s === -1) throw new Error("No holdings found. Claude said: " + raw.slice(0, 150));
+      const parsed = JSON.parse(raw.slice(s, e2 + 1));
+      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("No holdings extracted from screenshot.");
+      setHoldings(prev => { const existing = new Set(prev.map(h => h.ticker));
+        const newOnes = parsed.filter(h => !existing.has(h.ticker));
+        return [...prev, ...newOnes.map(h => ({ ...h, id: Date.now() + Math.random(), addedAt: new Date().toISOString() }))];
+      });
+      setView("holdings");
+    } catch(err) { setError("Error: " + (err.message || String(err))); }
+    finally { setUploading(false); }
+  };
+
+  const totalValue = holdings.reduce((sum, h) => { const v = parseFloat((h.currentValue || "").replace(/[^0-9.-]/g, ""));
+    return sum + (isNaN(v) ? 0 : v);
+  }, 0);
+
+  return (
+    <div style={{ paddingBottom:20 }}> <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}> <div style={{ fontFamily:"'DM Mono',monospace", fontSize:10, color:"#a09880", letterSpacing:"0.1em", textTransform:"uppercase" }}> My Holdings {holdings.length > 0 && <span style={{ marginLeft:6, background:"#6b5240", color:"#faf8f3", borderRadius:8, padding:"1px 7px", fontSize:9 }}>{holdings.length}</span>}
+        </div> <button onClick={() => { setView(view === "upload" ? "holdings" : "upload"); setError(null); }}
+          style={{ background:view==="upload"?"#6b5240":"#ede8de", color:view==="upload"?"#fdf9f3":"#5c4a32", border:"none", borderRadius:8, padding:"6px 14px", fontSize:11, cursor:"pointer", fontFamily:"'DM Mono',monospace", fontWeight:700 }}> {view === "upload" ? "Cancel" : "+ Upload Screenshot"}
+        </button> </div> {view === "upload" && (
+        <div style={{ background:"#fff", border:"1px solid #e5e0d5", borderRadius:16, padding:16, marginBottom:14 }}> <div style={{ fontSize:13, fontWeight:700, color:"#1a1a1a", marginBottom:6 }}>Upload Portfolio Screenshot</div> <div style={{ fontSize:12, color:"#7a7060", lineHeight:1.6, marginBottom:14 }}> Screenshot your brokerage app (Barclays, HL, IBKR, Trading 212, etc.) showing holdings. Claude extracts tickers, shares, average cost and P&L automatically.
+          </div> <label style={{ display:"block", border:"2px dashed #d5cec0", borderRadius:12, padding:"28px 16px", textAlign:"center", cursor:"pointer", background:"#faf8f3" }}> <input type="file" accept="image/*" onChange={handleImage} style={{ display:"none" }} /> {uploading ? (
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:10 }}> <span style={{ display:"inline-block", width:20, height:20, border:"2px solid #1a1a1a", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.8s linear infinite" }} /> <span style={{ fontSize:12, color:"#7a7060" }}>Analysing with Claude...</span> </div> ) : (
+              <div> <div style={{ fontSize:13, fontWeight:600, color:"#1a1a1a", marginBottom:4 }}>Tap to upload screenshot</div> <div style={{ fontSize:11, color:"#a09880" }}>JPG, PNG or HEIC · from camera roll or camera</div> </div> )}
+          </label> {error && <div style={{ marginTop:10, padding:"9px 12px", background:"#fee2e2", borderRadius:8, fontSize:11, color:"#dc2626", wordBreak:"break-word", fontFamily:"monospace", lineHeight:1.5 }}>{error}</div>}
+        </div> )}
+
+      {view === "holdings" && holdings.length === 0 && (
+        <div style={{ background:"#faf8f3", border:"1px dashed #d5cec0", borderRadius:16, padding:"32px 16px", textAlign:"center" }}> <div style={{ fontSize:13, fontWeight:600, color:"#3a3020", marginBottom:6 }}>No holdings yet</div> <div style={{ fontSize:12, color:"#a09880", lineHeight:1.5 }}>Upload a screenshot of your brokerage account and Claude will extract your positions automatically.</div> </div> )}
+
+      {view === "holdings" && holdings.length > 0 && (
+        <div> {totalValue > 0 && (
+            <div style={{ background:"#6b5240", borderRadius:12, padding:"12px 16px", marginBottom:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}> <span style={{ fontSize:11, color:"#a09880", fontFamily:"'DM Mono',monospace", textTransform:"uppercase", letterSpacing:"0.06em" }}>Total Value</span> <span style={{ fontSize:18, fontWeight:700, color:"#faf8f3", fontFamily:"'DM Mono',monospace" }}> {holdings[0]?.currency || "£"}{totalValue.toLocaleString("en-GB", { minimumFractionDigits:2, maximumFractionDigits:2 })}
+              </span> </div> )}
+          {holdings.map(h => (
+            <div key={h.id} style={{ background:"#fff", border:"1px solid #e5e0d5", borderRadius:14, padding:"13px 15px", marginBottom:10 }}> <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:4 }}> <div> <span style={{ fontFamily:"'DM Mono',monospace", fontWeight:700, fontSize:14, color:"#1a1a1a" }}>{h.ticker || "—"}</span> {h.name && <div style={{ fontSize:12, color:"#3a3020", fontWeight:600, marginTop:2 }}>{h.name}</div>}
+                </div> <button onClick={() => setHoldings(prev => prev.filter(x => x.id !== h.id))}
+                  style={{ background:"#f4f1ea", border:"none", borderRadius:6, padding:"3px 8px", fontSize:10, cursor:"pointer", color:"#7a7060", fontFamily:"'DM Mono',monospace" }}> Remove
+                </button> </div> <div style={{ display:"flex", gap:16, marginTop:8, flexWrap:"wrap" }}> {[["Shares", h.shares], ["Avg Cost", h.avgCost], ["Value", h.currentValue]].map(([label, val]) => val ? (
+                  <div key={label}> <div style={{ fontSize:9, color:"#a09880", fontFamily:"'DM Mono',monospace", textTransform:"uppercase", letterSpacing:"0.06em" }}>{label}</div> <div style={{ fontSize:13, fontWeight:700, color:"#1a1a1a" }}>{val}</div> </div> ) : null)}
+                {h.gainLoss && (
+                  <div> <div style={{ fontSize:9, color:"#a09880", fontFamily:"'DM Mono',monospace", textTransform:"uppercase", letterSpacing:"0.06em" }}>P&L</div> <div style={{ fontSize:13, fontWeight:700, color: h.gainLoss.startsWith("-") ? "#dc2626":"#4a7c35" }}>{h.gainLoss}</div> </div> )}
+              </div> </div> ))}
+          <button onClick={() => setView("upload")} style={{ width:"100%", padding:12, border:"2px dashed #d5cec0", borderRadius:12, background:"transparent", color:"#7a7060", fontSize:12, cursor:"pointer", fontFamily:"'DM Mono',monospace" }}> + Upload another screenshot
+          </button> </div> )}
+    </div> );
+}
+
+
+function App() { const [selected, setSelected] = useState(null);
+  const [homeTab, setHomeTab] = useState("themes");
+  const [analysedArticles, setAnalysedArticles] = useState([]);
+  const [themeList, setThemeList] = useState(themes);
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [editMode, setEditMode] = useState(false);
+  const [showAddTheme, setShowAddTheme] = useState(false);
+
+  const addArticle = (article) => setAnalysedArticles(prev => [article, ...prev]);
+
+  const updateTheme = (id, updater) => setThemeList(list => list.map(t => t.id === id ? updater(t) : t));
+
+  const deleteTheme = (id) => setThemeList(list => list.filter(t => t.id !== id));
+
+  const filteredThemes = themeList.filter(t=>{ if (activeFilter === "all")  return true;
+    if (activeFilter === "core") return t.coreGroup;
+    return t.broadGroup === activeFilter;
+  });
+
+  const tabs = [ { id: "themes", label: "Themes"    }, { id: "portfolio", label: "Portfolio" }, { id: "news", label: "FT Intel"  }, { id: "scenarios", label: "Scenarios" }, ];
+
+  return (
+    <div style={{ minHeight:"100vh",background:"#faf8f3",fontFamily:"'Sora',sans-serif" }}> <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=DM+Mono:wght@400;500;700&display=swap');
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 0; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+      `}</style> <div style={{ maxWidth:480,margin:"0 auto",padding:"0 16px 80px" }}> {!selected ? (
+          <> <div style={{ paddingTop:52,paddingBottom:16 }}> <h1 style={{ fontSize:32,fontWeight:800,color:"#0f172a",lineHeight:1.15,margin:"0 0 6px",letterSpacing:"-0.03em" }}> Track My Portfolio<br /><span style={{ color:"#94a3b8" }}>investment themes & news.</span> </h1> <p style={{ color:"#64748b",fontSize:13,lineHeight:1.6,margin:"0 0 14px" }}> Thesis · FT intelligence · ETF overlap · scenario testing — for UK investors on Barclays Smart Investor.
+              </p> <div style={{ background:"#6b5240",borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:8 }}> <span style={{ fontSize:14 }}></span> <span style={{ fontSize:12,color:"#e8d9c4" }}>UCITS ETFs are ISA & SIPP eligible on Barclays Smart Investor</span> </div> </div> <div style={{ display:"flex",gap:0,marginBottom:20,background:"#ede8de",borderRadius:14,padding:4 }}> {tabs.map(t => (
+                <button key={t.id} onClick={() => setHomeTab(t.id)} style={{ flex:1,padding:"10px 4px",border:"none",borderRadius:10,background:homeTab === t.id ? "#fff":"transparent",color:homeTab === t.id ? "#3d2e1e":"#8c7355",fontWeight:homeTab === t.id ? 700:500,fontSize:11,cursor:"pointer",boxShadow:homeTab === t.id ? "0 1px 4px #0002":"none",fontFamily:"'DM Mono',monospace",transition:"all 0.18s",position:"relative"}}> {t.label}
+                  {t.id === "news" && analysedArticles.length > 0 && (
+                    <span style={{ position:"absolute",top:4,right:6,background:"#dc2626",color:"#fff",borderRadius:8,fontSize:9,padding:"1px 5px",fontWeight:700 }}>{analysedArticles.length}</span> )}
+                </button> ))}
+            </div> {homeTab === "themes" && (
+              <> <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10 }}> <div style={{ fontFamily:"'DM Mono',monospace",fontSize:10,color:"#94a3b8",letterSpacing:"0.1em",textTransform:"uppercase" }}> {filteredThemes.length}/{themeList.length} themes
+                  </div> <button onClick={()=>{ setEditMode(!editMode); setShowAddTheme(false); }} style={{ background:editMode ? "#dc2626":"#ede8de",color:editMode ? "#fff":"#5c4a32",border:"none",borderRadius:8,padding:"5px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}> {editMode ? "Done Editing" : "Edit"}
+                  </button> </div> <FilterBar active={activeFilter} onChange={setActiveFilter} /> {showAddTheme && (
+                  <AddThemeForm
+                    onAdd={t=>{ setThemeList(l => [...l, t]); setShowAddTheme(false); }}
+                    onCancel={() => setShowAddTheme(false)}
+                  /> )}
+
+                {filteredThemes.map(t => (
+                  <ThemeCard
+                    key={t.id} theme={t}
+                    editMode={editMode}
+                    onClick={() => !editMode && setSelected(t)}
+                    onUpdate={(updater) => updateTheme(t.id, updater)}
+                    onDelete={() => deleteTheme(t.id)}
+                  /> ))}
+
+                {editMode && !showAddTheme && (
+                  <button onClick={() => setShowAddTheme(true)} style={{ width:"100%",padding:"14px",border:"2px dashed #c4aa8a",borderRadius:16,background:"transparent",color:"#8c7355",fontSize:13,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>+ Add New Theme</button> )}
+              </> )}
+
+            {homeTab === "portfolio" && <PortfolioTracker />}
+
+            {homeTab === "news" && (
+              <FTAnalyser analysedArticles={analysedArticles} onNewArticle={addArticle} /> )}
+
+            {homeTab === "scenarios" && <ScenarioTester />}
+
+            <div style={{ textAlign:"center",fontSize:11,color:"#94a3b8",marginTop:20,lineHeight:1.6 }}> Not investment advice. ETF availability subject to change — verify on Barclays Smart Investor before dealing.
+            </div> </> ) : (
+          <div style={{ paddingTop:52 }}> <ThemeDetail
+              theme={themeList.find(t => t.id === selected.id) || selected}
+              onBack={() => setSelected(null)}
+              onUpdate={(updater)=>{ const live = themeList.find(t => t.id === selected.id) || selected;
+                const updated = updater(live);
+                updateTheme(selected.id, () => updated);
+                setSelected(updated);
+              }}
+            /> </div> )}
+      </div> </div> );
+}
+
+
+// Mount the app
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>

@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://unpkg.com">
+<link rel="preconnect" href="https://corsproxy.io">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; }
@@ -90,7 +91,7 @@ const themes = [ { id: "photonics", label: "Trending", labelColor: "#16a34a", la
 ];
 // ─── LIVE PRICE HOOK (Yahoo Finance via CORS proxy) ───────────────────────────
 // Fetches latest price + YTD for a list of tickers on mount.
-// Uses allorigins.win to bypass CORS. Data is delayed ~15 min (free tier).
+// Uses corsproxy.io to bypass CORS. Data is delayed ~15 min (Yahoo free tier).
 function useLivePrices(tickers) {
   const [prices, setPrices] = useState({});
   const [loading, setLoading] = useState(false);
@@ -109,10 +110,9 @@ function useLivePrices(tickers) {
 
         // Current quote (price, market cap)
         const quoteUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}&fields=regularMarketPrice,marketCap`;
-        const quoteRes = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(quoteUrl)}`);
+        const quoteRes = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(quoteUrl)}`);
         if (!quoteRes.ok) return;
-        const quoteOuter = await quoteRes.json();
-        const quoteData = JSON.parse(quoteOuter.contents);
+        const quoteData = await quoteRes.json();
         const quoteResult = quoteData?.quoteResponse?.result || [];
 
         // Per-ticker MTD from historical daily closes
@@ -120,10 +120,9 @@ function useLivePrices(tickers) {
         await Promise.all(tickers.map(async (sym) => {
           try {
             const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?period1=${period1}&period2=${period2}&interval=1d`;
-            const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(chartUrl)}`);
+            const r = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(chartUrl)}`);
             if (!r.ok) return;
-            const outer = await r.json();
-            const data = JSON.parse(outer.contents);
+            const data = await r.json();
             const result = data?.chart?.result?.[0];
             const closes = result?.indicators?.quote?.[0]?.close || [];
             const timestamps = result?.timestamp || [];
@@ -437,10 +436,9 @@ function FTAnalyser({ analysedArticles, onNewArticle }) { const [mode, setMode] 
 
   const fetchFromUrl = async ()=>{ if (!urlInput.trim()) return;
     setFetchStatus("fetching"); setError(null);
-    try { const res = await fetch("https://api.allorigins.win/get?url=" + encodeURIComponent(urlInput.trim()));
+    try { const res = await fetch("https://corsproxy.io/?url=" + encodeURIComponent(urlInput.trim()));
       if (!res.ok) throw new Error("Proxy fetch failed: " + res.status);
-      const data = await res.json();
-      const html = data.contents || "";
+      const html = await res.text();
       const stripped = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi," ").replace(/<style[^>]*>[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&amp;/g,"&").replace(/&nbsp;/g," ").replace(/\s{2}/g," ").trim();
       if (stripped.length < 200) throw new Error("Could not extract text — try paste mode.");
       const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i);
@@ -492,7 +490,7 @@ function FTAnalyser({ analysedArticles, onNewArticle }) { const [mode, setMode] 
 
           <div style={{ display:"flex",justifyContent:"flex-end",marginTop:10 }}> <button onClick={analyseArticle} disabled={loading||!canAnalyse} style={{ background:(loading||!canAnalyse)?"#94a3b8":"#6b5240",color:"#fff",border:"none",borderRadius:9,padding:"10px 20px",fontSize:13,cursor:(loading||!canAnalyse)?"not-allowed":"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}> {loading ? <><span style={{ display:"inline-block",width:12,height:12,border:"2px solid #fff",borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.8s linear infinite" }}/> Analysing…</> : "Analyse with Claude"}
             </button> </div> {error && <div style={{ marginTop:8,padding:"9px 11px",background:"#fee2e2",borderRadius:8,fontSize:11,color:"#dc2626",lineHeight:1.5,wordBreak:"break-word",fontFamily:"monospace" }}>{error}</div>}
-          <div style={{ marginTop:8,fontSize:10,color:"#94a3b8" }}>URL mode uses allorigins.win CORS proxy. If it fails, use paste mode.</div> </div> )}
+          <div style={{ marginTop:8,fontSize:10,color:"#94a3b8" }}>URL mode uses corsproxy.io. If it fails, copy the article text and use paste mode instead.</div> </div> )}
 
       {mode==="feed" && analysedArticles.length===0 && (
         <div style={{ background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:16,padding:"28px 16px",textAlign:"center" }}> <div style={{ fontSize:28,marginBottom:6 }}></div> <div style={{ fontSize:13,fontWeight:700,color:"#334155",marginBottom:4 }}>No articles yet</div> <div style={{ fontSize:12,color:"#e8d9c4",lineHeight:1.5 }}>Add an FT article via gift link or paste the text. Claude maps the impact to each investment theme.</div> </div> )}

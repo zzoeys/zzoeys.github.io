@@ -1,34 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-<meta name="theme-color" content="#faf8f3" />
-<title>Track My Portfolio</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preconnect" href="https://unpkg.com">
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<style>
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #faf8f3; }
-  body { font-family: 'Sora', -apple-system, BlinkMacSystemFont, sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; color: #0f172a; }
-  #root { min-height: 100vh; }
-  button { font-family: inherit; cursor: pointer; }
-  input, textarea, select { font-family: inherit; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-  .boot { display:flex; align-items:center; justify-content:center; min-height:100vh; font-family:'DM Mono',monospace; color:#94a3b8; font-size:12px; letter-spacing:0.1em; text-transform:uppercase; }
-  .boot::before { content: ""; display: inline-block; width: 12px; height: 12px; border: 2px solid #0f172a; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 10px; }
-</style>
-</head>
-<body>
-<div id="root"><div class="boot">Loading Track My Portfolio</div></div>
-<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
-<script type="text/babel" data-presets="react">
-const { useState, useEffect, useRef } = React;
+import { useState, useEffect, useRef } from "react";
 const SCENARIOS = { bubble: { id: "bubble", icon: "💥", title: "AI Bubble Bursts", subtitle: "Hyperscaler capex freezes; AI narrative collapses", description: "Hyperscalers announce 20–40% capex cuts. NVDA misses guidance. AI ROI narrative questioned by CFOs. Similar to dot-com bust in tech capex, 2000–02.", color: "#dc2626", bg: "#fef2f2", impacts: { "ai-infra":    { score: -5, label: "Catastrophic", detail: "NVDA/NBIS/TSM are pure beneficiaries of AI capex — a freeze hits them hardest. NVDA dropped 66% in 2022 on a far smaller capex dip." }, "photonics":   { score: -5, label: "Catastrophic", detail: "Optical interconnects are 100% levered to data centre build-out. If racks stop shipping, LITE and AAOI revenues collapse within 2 quarters." }, "memory":      { score: -4, label: "Severe", detail: "HBM demand craters with AI accelerator orders. MU has 60%+ gross margins to give back. Memory is the most cyclical semi segment." }, "physical-ai": { score: -3, label: "High", detail: "Partially insulated — automotive & industrial lidar contracts have multi-year design-in cycles. But narrative stocks like OUST get de-rated fast." }, "power":       { score: -2, label: "Moderate", detail: "Grid infrastructure demand exists beyond AI (EV, reshoring). CEG/GEV have long-term contracts. VRT most exposed to data centre build slowdown." }, "space":       { score: -1, label: "Low", detail: "Commercial space has independent revenue streams (broadband, govt contracts). ASTS/RKLB not AI-dependent. May attract capital rotation." }, "quantum":     { score: -2, label: "Moderate", detail: "Government and pharma pilot contracts provide a floor. But narrative collapses further — IONQ/RGTI trade on sentiment, not earnings." }, "cybersecurity":  { score: -1, label: "Low", detail: "Security spending is counter-cyclical — enterprises cannot turn off firewalls. But multiple compression hits high-growth SaaS names like CRWD/ZS hard." }, "real-estate":   { score: 1, label: "Mild Tailwind", detail: "Data centre REITs (DLR, EQIX) partially insulated as hyperscaler lease commitments are multi-year. Traditional REITs benefit from capital rotation." }, "entertainment": { score: 3, label: "Strong Tailwind", detail: "The 'anti-AI' trade. If AI hype collapses, consumers double down on human-curated experiences — live events, theme parks, sport. LYV and DIS historically outperform post-tech busts." }}
   }, tariff: { id: "tariff", icon: "🏛️", title: "US Tariff Nationalism", subtitle: "Broad tariffs, export controls & supply chain reshoring", description: "US imposes 25–60% tariffs broadly. Semiconductor export controls tighten. TSMC forced onshoring accelerates. Global trade volumes contract 10–15%.", color: "#7c3aed", bg: "#faf5ff", impacts: { "ai-infra":    { score: -3, label: "High", detail: "TSMC has Taiwan concentration risk and faces forced onshoring costs. NVDA export controls to China already biting — expand to allies possible. NBIS (European) partially shielded." }, "photonics":   { score: -4, label: "Severe", detail: "Asian wafer fabs and laser diode supply chains are heavily exposed. AAOI relies on Chinese manufacturing. 25% tariffs on optical components compress margins severely." }, "memory":      { score: -3, label: "High", detail: "MU benefits from tariffs on Chinese DRAM (CXMT hit hardest). But Samsung/Hynix tariffs raise own costs. WDC has Asian manufacturing exposure." }, "physical-ai": { score: -3, label: "High", detail: "LiDAR components manufactured in Asia. Chinese competitors (Hesai, RoboSense) face export bans but so do US firms' supply chains. Mixed net effect." }, "power":       { score: 2, label: "Tailwind", detail: "US power infrastructure is domestic — VRT, GEV, CEG all benefit from reshoring manufacturing demand and data centre onshoring. Potentially strongest beneficiary." }, "space":       { score: 1, label: "Mild Tailwind", detail: "National security spending increases under nationalist administrations. RKLB and ASTS benefit from US government contracts. Launch nationalism favours domestic names." }, "quantum":     { score: 1, label: "Mild Tailwind", detail: "Quantum is a national security technology. DoD/DARPA spending accelerates under nationalist policy. IONQ's government contracts become more valuable." }, "cybersecurity":  { score: 2, label: "Tailwind", detail: "US-first policy accelerates removal of foreign-origin software (Kaspersky precedent). CRWD, PANW, ZS are domestic champions. Federal contract pipeline grows." }, "real-estate":   { score: 1, label: "Mild Tailwind", detail: "Reshoring drives industrial REIT demand (SEGRO benefits from nearshoring logistics). Data centre leasing unaffected by tariffs — services not goods." }, "entertainment": { score: 2, label: "Tailwind", detail: "Tariffs are largely irrelevant to live entertainment — concerts, sports, and theme parks are domestic services. Consumers shift spend from imported goods to local experiences." }}
   }
@@ -590,7 +560,7 @@ function PortfolioTracker() { const [holdings, setHoldings] = useState([]);
 }
 
 
-function App() { const [selected, setSelected] = useState(null);
+export default function App() { const [selected, setSelected] = useState(null);
   const [homeTab, setHomeTab] = useState("themes");
   const [analysedArticles, setAnalysedArticles] = useState([]);
   const [themeList, setThemeList] = useState(themes);
@@ -667,10 +637,3 @@ function App() { const [selected, setSelected] = useState(null);
             /> </div> )}
       </div> </div> );
 }
-
-
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
-</script>
-</body>
-</html>

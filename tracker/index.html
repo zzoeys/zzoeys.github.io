@@ -91,27 +91,72 @@ const themes = [ { id: "photonics", label: "Trending", labelColor: "#16a34a", la
 // ─── LIVE PRICE HOOK (Yahoo Finance via CORS proxy) ───────────────────────────
 // Fetches latest price + YTD for a list of tickers on mount.
 // Uses allorigins.win to bypass CORS. Data is delayed ~15 min (free tier).
-function useLivePrices(tickers) { const [prices, setPrices] = useState({});
+function useLivePrices(tickers) {
+  const [prices, setPrices] = useState({});
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { if (!tickers || tickers.length === 0) return;
+  useEffect(() => {
+    if (!tickers || tickers.length === 0) return;
     let cancelled = false;
-    const fetchPrices = async () => { setLoading(true);
-      try { const symbols = tickers.join(",");
-        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}&fields=regularMarketPrice,regularMarketChangePercent,marketCap`;
-        const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const res = await fetch(proxy);
-        if (!res.ok) return;
-        const outer = await res.json();
-        const data = JSON.parse(outer.contents);
-        const result = data?.quoteResponse?.result || [];
-        if (!cancelled) { const map = {};
-          result.forEach(q => { const pct = q.regularMarketChangePercent;
-            map[q.symbol] = { price: q.regularMarketPrice ? `$${q.regularMarketPrice.toFixed(2)}` : null, ytd: pct != null ? `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%` : null, mktCap: q.marketCap ? formatMktCap(q.marketCap) : null, live: true, };
+    const fetchPrices = async () => {
+      setLoading(true);
+      try {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const period1 = Math.floor((monthStart.getTime() - 5 * 86400000) / 1000);
+        const period2 = Math.floor(now.getTime() / 1000);
+        const symbols = tickers.join(",");
+
+        // Current quote (price, market cap)
+        const quoteUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}&fields=regularMarketPrice,marketCap`;
+        const quoteRes = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(quoteUrl)}`);
+        if (!quoteRes.ok) return;
+        const quoteOuter = await quoteRes.json();
+        const quoteData = JSON.parse(quoteOuter.contents);
+        const quoteResult = quoteData?.quoteResponse?.result || [];
+
+        // Per-ticker MTD from historical daily closes
+        const mtdMap = {};
+        await Promise.all(tickers.map(async (sym) => {
+          try {
+            const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?period1=${period1}&period2=${period2}&interval=1d`;
+            const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(chartUrl)}`);
+            if (!r.ok) return;
+            const outer = await r.json();
+            const data = JSON.parse(outer.contents);
+            const result = data?.chart?.result?.[0];
+            const closes = result?.indicators?.quote?.[0]?.close || [];
+            const timestamps = result?.timestamp || [];
+            if (closes.length < 2) return;
+            const monthStartTs = monthStart.getTime() / 1000;
+            let baselineClose = null;
+            for (let i = timestamps.length - 1; i >= 0; i--) {
+              if (timestamps[i] < monthStartTs && closes[i] != null) {
+                baselineClose = closes[i];
+                break;
+              }
+            }
+            const latestClose = [...closes].reverse().find(c => c != null);
+            if (baselineClose && latestClose) {
+              mtdMap[sym] = ((latestClose - baselineClose) / baselineClose) * 100;
+            }
+          } catch(e) { /* skip */ }
+        }));
+
+        if (!cancelled) {
+          const map = {};
+          quoteResult.forEach(q => {
+            const mtdPct = mtdMap[q.symbol];
+            map[q.symbol] = {
+              price: q.regularMarketPrice ? `$${q.regularMarketPrice.toFixed(2)}` : null,
+              ytd: mtdPct != null ? `${mtdPct >= 0 ? "+" : ""}${mtdPct.toFixed(2)}%` : null,
+              mktCap: q.marketCap ? formatMktCap(q.marketCap) : null,
+              live: true,
+            };
           });
           setPrices(map);
         }
-      } catch(e) { /* silently fail - show cached data */ }
+      } catch(e) { /* silently fail */ }
       finally { if (!cancelled) setLoading(false); }
     };
     fetchPrices();
@@ -120,7 +165,6 @@ function useLivePrices(tickers) { const [prices, setPrices] = useState({});
 
   return { prices, loading };
 }
-
 function formatMktCap(v) { if (v >= 1e12) return `$${(v/1e12).toFixed(2)}T`;
   if (v >= 1e9)  return `$${(v/1e9).toFixed(1)}B`;
   if (v >= 1e6)  return `$${(v/1e6).toFixed(0)}M`;
@@ -168,7 +212,7 @@ function StockCard({ stock, liveData }) { const live = liveData || {};
 function ThemeDetail({ theme, onBack, onUpdate }) {
   const [tab, setTab] = useState("overview");
   const [editing, setEditing] = useState(false);
-  const tabs = ["overview", "etfs", "stocks"];
+  const tabs = ["overview", "stocks", "etfs"];
   const tickers = (theme.stocks || []).map(s => s.ticker);
   const { prices = {}, loading: pricesLoading } = useLivePrices(tickers);
 
@@ -195,6 +239,24 @@ function ThemeDetail({ theme, onBack, onUpdate }) {
         </div>
       ) : (
         <p style={{ color:"#64748b",fontSize:15,margin:"0 0 12px" }}>{theme.subtitle}</p>
+      )}
+      {editing && (
+        <div style={{ marginBottom:14,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap" }}>
+          <span style={{ fontFamily:"'DM Mono',monospace",fontSize:10,color:"#94a3b8",letterSpacing:"0.08em",textTransform:"uppercase" }}>Group</span>
+          <select value={theme.broadGroup || "tech"} onChange={e => onUpdate(t => ({...t, broadGroup: e.target.value}))}
+            style={{ padding:"5px 10px",border:"1px solid #e5e0d5",borderRadius:6,fontSize:12,background:"#fff",fontFamily:"'DM Mono',monospace",color:"#3d2e1e",outline:"none",cursor:"pointer" }}>
+            <option value="tech">Tech</option>
+            <option value="consumer">Consumer</option>
+            <option value="energy">Energy</option>
+            <option value="financials">Financials</option>
+            <option value="defence">Defence</option>
+            <option value="healthcare">Healthcare</option>
+          </select>
+          <label style={{ display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#64748b",fontFamily:"'DM Mono',monospace",cursor:"pointer",userSelect:"none" }}>
+            <input type="checkbox" checked={!!theme.coreGroup} onChange={e => onUpdate(t => ({...t, coreGroup: e.target.checked}))} style={{ cursor:"pointer" }} />
+            Core holding
+          </label>
+        </div>
       )}
       <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:20 }}>
         <RiskDots count={theme.riskDots} />

@@ -1,4 +1,21 @@
 import { useState, useEffect, useRef } from "react";
+
+// ═════════════════════════════════════════════════════════════════════════════
+// API CONFIGURATION
+// ═════════════════════════════════════════════════════════════════════════════
+// This is the Cloudflare Worker URL that proxies our API calls.
+// It handles three things on our behalf:
+//   - Yahoo Finance fetches (so we don't hit CORS errors)
+//   - Anthropic API calls (so our API key stays secret on the worker)
+//
+// If you redeploy the worker to a new URL, change this constant.
+// If the worker is broken, the app falls back to the hardcoded data.
+//
+// To test the worker yourself, paste this into your browser:
+//   https://YOUR-WORKER.workers.dev/yahoo/quote?symbols=AAPL
+const WORKER_URL = "https://tracker-api.YOURNAME.workers.dev";
+// ═════════════════════════════════════════════════════════════════════════════
+
 const SCENARIOS = { bubble: { id: "bubble", icon: "💥", title: "AI Bubble Bursts", subtitle: "Hyperscaler capex freezes; AI narrative collapses", description: "Hyperscalers announce 20–40% capex cuts. NVDA misses guidance. AI ROI narrative questioned by CFOs. Similar to dot-com bust in tech capex, 2000–02.", color: "#dc2626", bg: "#fef2f2", impacts: { "ai-infra":    { score: -5, label: "Catastrophic", detail: "NVDA/NBIS/TSM are pure beneficiaries of AI capex — a freeze hits them hardest. NVDA dropped 66% in 2022 on a far smaller capex dip." }, "photonics":   { score: -5, label: "Catastrophic", detail: "Optical interconnects are 100% levered to data centre build-out. If racks stop shipping, LITE and AAOI revenues collapse within 2 quarters." }, "memory":      { score: -4, label: "Severe", detail: "HBM demand craters with AI accelerator orders. MU has 60%+ gross margins to give back. Memory is the most cyclical semi segment." }, "physical-ai": { score: -3, label: "High", detail: "Partially insulated — automotive & industrial lidar contracts have multi-year design-in cycles. But narrative stocks like OUST get de-rated fast." }, "power":       { score: -2, label: "Moderate", detail: "Grid infrastructure demand exists beyond AI (EV, reshoring). CEG/GEV have long-term contracts. VRT most exposed to data centre build slowdown." }, "space":       { score: -1, label: "Low", detail: "Commercial space has independent revenue streams (broadband, govt contracts). ASTS/RKLB not AI-dependent. May attract capital rotation." }, "quantum":     { score: -2, label: "Moderate", detail: "Government and pharma pilot contracts provide a floor. But narrative collapses further — IONQ/RGTI trade on sentiment, not earnings." }, "cybersecurity":  { score: -1, label: "Low", detail: "Security spending is counter-cyclical — enterprises cannot turn off firewalls. But multiple compression hits high-growth SaaS names like CRWD/ZS hard." }, "real-estate":   { score: 1, label: "Mild Tailwind", detail: "Data centre REITs (DLR, EQIX) partially insulated as hyperscaler lease commitments are multi-year. Traditional REITs benefit from capital rotation." }, "entertainment": { score: 3, label: "Strong Tailwind", detail: "The 'anti-AI' trade. If AI hype collapses, consumers double down on human-curated experiences — live events, theme parks, sport. LYV and DIS historically outperform post-tech busts." }}
   }, tariff: { id: "tariff", icon: "🏛️", title: "US Tariff Nationalism", subtitle: "Broad tariffs, export controls & supply chain reshoring", description: "US imposes 25–60% tariffs broadly. Semiconductor export controls tighten. TSMC forced onshoring accelerates. Global trade volumes contract 10–15%.", color: "#7c3aed", bg: "#faf5ff", impacts: { "ai-infra":    { score: -3, label: "High", detail: "TSMC has Taiwan concentration risk and faces forced onshoring costs. NVDA export controls to China already biting — expand to allies possible. NBIS (European) partially shielded." }, "photonics":   { score: -4, label: "Severe", detail: "Asian wafer fabs and laser diode supply chains are heavily exposed. AAOI relies on Chinese manufacturing. 25% tariffs on optical components compress margins severely." }, "memory":      { score: -3, label: "High", detail: "MU benefits from tariffs on Chinese DRAM (CXMT hit hardest). But Samsung/Hynix tariffs raise own costs. WDC has Asian manufacturing exposure." }, "physical-ai": { score: -3, label: "High", detail: "LiDAR components manufactured in Asia. Chinese competitors (Hesai, RoboSense) face export bans but so do US firms' supply chains. Mixed net effect." }, "power":       { score: 2, label: "Tailwind", detail: "US power infrastructure is domestic — VRT, GEV, CEG all benefit from reshoring manufacturing demand and data centre onshoring. Potentially strongest beneficiary." }, "space":       { score: 1, label: "Mild Tailwind", detail: "National security spending increases under nationalist administrations. RKLB and ASTS benefit from US government contracts. Launch nationalism favours domestic names." }, "quantum":     { score: 1, label: "Mild Tailwind", detail: "Quantum is a national security technology. DoD/DARPA spending accelerates under nationalist policy. IONQ's government contracts become more valuable." }, "cybersecurity":  { score: 2, label: "Tailwind", detail: "US-first policy accelerates removal of foreign-origin software (Kaspersky precedent). CRWD, PANW, ZS are domestic champions. Federal contract pipeline grows." }, "real-estate":   { score: 1, label: "Mild Tailwind", detail: "Reshoring drives industrial REIT demand (SEGRO benefits from nearshoring logistics). Data centre leasing unaffected by tariffs — services not goods." }, "entertainment": { score: 2, label: "Tailwind", detail: "Tariffs are largely irrelevant to live entertainment — concerts, sports, and theme parks are domestic services. Consumers shift spend from imported goods to local experiences." }}
   }
@@ -58,30 +75,86 @@ const themes = [ { id: "photonics", label: "Trending", labelColor: "#16a34a", la
       "UK industrial REIT undersupply as nearshoring logistics demand accelerates",
     ]}
 ];
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION: LIVE PRICE HOOK (Yahoo Finance via Cloudflare Worker)
+// ═════════════════════════════════════════════════════════════════════════════
+// Fetches current price + month-to-date performance for a list of tickers.
+// Called from ThemeDetail when the user opens the Stocks tab.
+//
+// Returns: { prices: { TICKER: {price, ytd, mktCap, live: true} }, loading: bool }
+//
+// HOW MTD IS CALCULATED:
+//   1. Fetch the daily closing prices from ~5 days before the 1st of this month
+//      up to today
+//   2. Find the last close BEFORE the 1st of this month (the "baseline")
+//   3. MTD = (today's price - baseline) / baseline × 100
+// ═════════════════════════════════════════════════════════════════════════════
 // ─── LIVE PRICE HOOK (Yahoo Finance via CORS proxy) ───────────────────────────
 // Fetches latest price + YTD for a list of tickers on mount.
-// Uses allorigins.win to bypass CORS. Data is delayed ~15 min (free tier).
-function useLivePrices(tickers) { const [prices, setPrices] = useState({});
+// Uses corsproxy.io to bypass CORS. Data is delayed ~15 min (Yahoo free tier).
+function useLivePrices(tickers) {
+  const [prices, setPrices] = useState({});
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { if (!tickers || tickers.length === 0) return;
+  useEffect(() => {
+    if (!tickers || tickers.length === 0) return;
     let cancelled = false;
-    const fetchPrices = async () => { setLoading(true);
-      try { const symbols = tickers.join(",");
-        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}&fields=regularMarketPrice,regularMarketChangePercent,marketCap`;
-        const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const res = await fetch(proxy);
-        if (!res.ok) return;
-        const outer = await res.json();
-        const data = JSON.parse(outer.contents);
-        const result = data?.quoteResponse?.result || [];
-        if (!cancelled) { const map = {};
-          result.forEach(q => { const pct = q.regularMarketChangePercent;
-            map[q.symbol] = { price: q.regularMarketPrice ? `$${q.regularMarketPrice.toFixed(2)}` : null, ytd: pct != null ? `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%` : null, mktCap: q.marketCap ? formatMktCap(q.marketCap) : null, live: true, };
+    const fetchPrices = async () => {
+      setLoading(true);
+      try {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const period1 = Math.floor((monthStart.getTime() - 5 * 86400000) / 1000);
+        const period2 = Math.floor(now.getTime() / 1000);
+        const symbols = tickers.join(",");
+
+        // Current quote (price, market cap)
+        const quoteRes = await fetch(`${WORKER_URL}/yahoo/quote?symbols=${encodeURIComponent(symbols)}`);
+        if (!quoteRes.ok) return;
+        const quoteData = await quoteRes.json();
+        const quoteResult = quoteData?.quoteResponse?.result || [];
+
+        // Per-ticker MTD from historical daily closes
+        const mtdMap = {};
+        await Promise.all(tickers.map(async (sym) => {
+          try {
+            const r = await fetch(`${WORKER_URL}/yahoo/chart/${encodeURIComponent(sym)}?period1=${period1}&period2=${period2}`);
+            if (!r.ok) return;
+            const data = await r.json();
+            const result = data?.chart?.result?.[0];
+            const closes = result?.indicators?.quote?.[0]?.close || [];
+            const timestamps = result?.timestamp || [];
+            if (closes.length < 2) return;
+            const monthStartTs = monthStart.getTime() / 1000;
+            let baselineClose = null;
+            for (let i = timestamps.length - 1; i >= 0; i--) {
+              if (timestamps[i] < monthStartTs && closes[i] != null) {
+                baselineClose = closes[i];
+                break;
+              }
+            }
+            const latestClose = [...closes].reverse().find(c => c != null);
+            if (baselineClose && latestClose) {
+              mtdMap[sym] = ((latestClose - baselineClose) / baselineClose) * 100;
+            }
+          } catch(e) { console.warn("Yahoo chart fetch failed:", e.message); }
+        }));
+
+        if (!cancelled) {
+          const map = {};
+          quoteResult.forEach(q => {
+            const mtdPct = mtdMap[q.symbol];
+            map[q.symbol] = {
+              price: q.regularMarketPrice ? `$${q.regularMarketPrice.toFixed(2)}` : null,
+              ytd: mtdPct != null ? `${mtdPct >= 0 ? "+" : ""}${mtdPct.toFixed(2)}%` : null,
+              mktCap: q.marketCap ? formatMktCap(q.marketCap) : null,
+              live: true,
+            };
           });
           setPrices(map);
         }
-      } catch(e) { /* silently fail - show cached data */ }
+      } catch(e) { console.warn("Yahoo MTD fetch failed:", e.message); }
       finally { if (!cancelled) setLoading(false); }
     };
     fetchPrices();
@@ -90,7 +163,6 @@ function useLivePrices(tickers) { const [prices, setPrices] = useState({});
 
   return { prices, loading };
 }
-
 function formatMktCap(v) { if (v >= 1e12) return `$${(v/1e12).toFixed(2)}T`;
   if (v >= 1e9)  return `$${(v/1e9).toFixed(1)}B`;
   if (v >= 1e6)  return `$${(v/1e6).toFixed(0)}M`;
@@ -131,14 +203,14 @@ function StockCard({ stock, liveData }) { const live = liveData || {};
   const displayMktCap = live.mktCap || stock.mktCap;
   const pos = displayYtd ? displayYtd.startsWith("+") : true;
   return (
-    <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",marginBottom:10 }}> <div style={{ display:"flex",justifyContent:"space-between",marginBottom:2 }}> <span style={{ fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:14,color:"#0f172a" }}>{stock.ticker}</span> <span title="Month-to-date performance" style={{ fontFamily:"'DM Mono',monospace",fontSize:13,fontWeight:700,color:pos ? "#16a34a":"#dc2626",cursor:"help" }}>{displayYtd} MTD</span> </div> <div style={{ fontSize:12,fontWeight:600,color:"#334155",marginBottom:2 }}>{stock.name}</div> <div style={{ fontSize:11,color:"#64748b",marginBottom:8,lineHeight:1.5 }}>{stock.desc}</div> <div style={{ display:"flex",gap:20,alignItems:"center",flexWrap:"wrap" }}> <div><div style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>PRICE</div><div style={{ fontSize:12,fontWeight:700,color:"#0f172a" }}>{displayPrice}</div></div> <div><div style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>YTD</div><div style={{ fontSize:12,fontWeight:700,color:pos?"#16a34a":"#dc2626" }}>{displayYtd}</div></div> <div><div style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>MKT CAP</div><div style={{ fontSize:12,fontWeight:700,color:"#0f172a" }}>{displayMktCap}</div></div> {live.live && <span style={{ fontSize:9,background:"#dcfce7",color:"#16a34a",borderRadius:4,padding:"2px 5px",fontFamily:"'DM Mono',monospace" }}>LIVE</span>}
+    <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",marginBottom:10 }}> <div style={{ display:"flex",justifyContent:"space-between",marginBottom:2 }}> <span style={{ fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:14,color:"#0f172a" }}>{stock.ticker}</span> <span title={live.live ? "Month-to-date performance (live from Yahoo Finance)" : "Year-to-date — live MTD loading..."} style={{ fontFamily:"'DM Mono',monospace",fontSize:13,fontWeight:700,color:pos ? "#16a34a":"#dc2626",cursor:"help" }}>{displayYtd} {live.live ? "MTD" : "YTD"}</span> </div> <div style={{ fontSize:12,fontWeight:600,color:"#334155",marginBottom:2 }}>{stock.name}</div> <div style={{ fontSize:11,color:"#64748b",marginBottom:8,lineHeight:1.5 }}>{stock.desc}</div> <div style={{ display:"flex",gap:20,alignItems:"center",flexWrap:"wrap" }}> <div><div style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>PRICE</div><div style={{ fontSize:12,fontWeight:700,color:"#0f172a" }}>{displayPrice}</div></div> <div><div style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>YTD</div><div style={{ fontSize:12,fontWeight:700,color:stock.ytd && stock.ytd.startsWith("+")?"#16a34a":"#dc2626" }}>{stock.ytd}</div></div> <div><div style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>MKT CAP</div><div style={{ fontSize:12,fontWeight:700,color:"#0f172a" }}>{displayMktCap}</div></div> {live.live && <span style={{ fontSize:9,background:"#dcfce7",color:"#16a34a",borderRadius:4,padding:"2px 5px",fontFamily:"'DM Mono',monospace" }}>LIVE</span>}
       </div> </div> );
 }
 
 function ThemeDetail({ theme, onBack, onUpdate }) {
   const [tab, setTab] = useState("overview");
   const [editing, setEditing] = useState(false);
-  const tabs = ["overview", "etfs", "stocks"];
+  const tabs = ["overview", "stocks", "etfs"];
   const tickers = (theme.stocks || []).map(s => s.ticker);
   const { prices = {}, loading: pricesLoading } = useLivePrices(tickers);
 
@@ -165,6 +237,24 @@ function ThemeDetail({ theme, onBack, onUpdate }) {
         </div>
       ) : (
         <p style={{ color:"#64748b",fontSize:15,margin:"0 0 12px" }}>{theme.subtitle}</p>
+      )}
+      {editing && (
+        <div style={{ marginBottom:14,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap" }}>
+          <span style={{ fontFamily:"'DM Mono',monospace",fontSize:10,color:"#94a3b8",letterSpacing:"0.08em",textTransform:"uppercase" }}>Group</span>
+          <select value={theme.broadGroup || "tech"} onChange={e => onUpdate(t => ({...t, broadGroup: e.target.value}))}
+            style={{ padding:"5px 10px",border:"1px solid #e5e0d5",borderRadius:6,fontSize:12,background:"#fff",fontFamily:"'DM Mono',monospace",color:"#3d2e1e",outline:"none",cursor:"pointer" }}>
+            <option value="tech">Tech</option>
+            <option value="consumer">Consumer</option>
+            <option value="energy">Energy</option>
+            <option value="financials">Financials</option>
+            <option value="defence">Defence</option>
+            <option value="healthcare">Healthcare</option>
+          </select>
+          <label style={{ display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#64748b",fontFamily:"'DM Mono',monospace",cursor:"pointer",userSelect:"none" }}>
+            <input type="checkbox" checked={!!theme.coreGroup} onChange={e => onUpdate(t => ({...t, coreGroup: e.target.checked}))} style={{ cursor:"pointer" }} />
+            Core holding
+          </label>
+        </div>
       )}
       <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:20 }}>
         <RiskDots count={theme.riskDots} />
@@ -331,81 +421,140 @@ function ThemeCard({ theme, onClick, editMode, onUpdate, onDelete }) { const bes
         <div style={{ borderTop:"1px solid #f1f5f9",paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center" }}> <span style={{ fontFamily:"'DM Mono',monospace",fontSize:11,color:"#94a3b8" }}>{best.ticker} · YTD</span> <span style={{ fontFamily:"'DM Mono',monospace",fontSize:16,fontWeight:700,color:parseFloat(best.ytd) >= 0 ? "#16a34a":"#dc2626" }}>{best.ytd}</span> </div> )}
     </div> );
 }
-function FTAnalyser({ analysedArticles, onNewArticle }) { const [mode, setMode] = useState("feed");
-  const [inputMode, setInputMode] = useState("text");
-  const [urlInput, setUrlInput] = useState("");
-  const [articleText, setArticleText] = useState("");
-  const [articleTitle, setArticleTitle] = useState("");
-  const [fetchStatus, setFetchStatus] = useState(null);
-  const [loading, setLoading] = useState(false);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION: NEWS INTEL — PASTE PRE-ANALYSED ARTICLE JSON
+// ═════════════════════════════════════════════════════════════════════════════
+// You analyse articles by chatting with Claude (e.g. claude.ai) separately,
+// then paste the JSON output here. The app stores it the same way it would
+// have if Claude had been called from the browser.
+//
+// Expected JSON shape:
+//   {
+//     "headline": "...",
+//     "summary": "...",
+//     "keyThemes": ["..."],
+//     "source": "FT",
+//     "sentiment": "bullish" | "bearish" | "neutral",
+//     "sourceUrl": "https://ft.com/...",
+//     "themeImpacts": [
+//       { "themeTitle": "...", "impact": "...", "impactScore": -3..3, "reasoning": "..." }
+//     ],
+//     "signals": [
+//       { "themeTitle": "...", "type": "bullish"|"bearish",
+//         "strength": 1|2|3, "headline": "...", "evidence": "short quote" }
+//     ]
+//   }
+// ═════════════════════════════════════════════════════════════════════════════
+function FTAnalyser({ analysedArticles, onNewArticle }) {
+  const [mode, setMode] = useState("feed");
+  const [jsonInput, setJsonInput] = useState("");
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
 
-  const themeNames = themes.map(t => t.title).join(", ");
-  const isUrl = s => s.trim().startsWith("http");
+  const impactColour = score =>
+    score >= 2 ? { text:"#16a34a", bg:"#dcfce7", label:"▲ Bullish" } :
+    score === 1 ? { text:"#65a30d", bg:"#f0fdf4", label:"▲ Mild Bullish" } :
+    score === 0 ? { text:"#64748b", bg:"#f1f5f9", label:"→ Neutral" } :
+    score === -1 ? { text:"#d97706", bg:"#fef3c7", label:"▼ Mild Bearish" } :
+    { text:"#dc2626", bg:"#fee2e2", label:"▼ Bearish" };
 
-  const fetchFromUrl = async ()=>{ if (!urlInput.trim()) return;
-    setFetchStatus("fetching"); setError(null);
-    try { const res = await fetch("https://api.allorigins.win/get?url=" + encodeURIComponent(urlInput.trim()));
-      if (!res.ok) throw new Error("Proxy fetch failed: " + res.status);
-      const data = await res.json();
-      const html = data.contents || "";
-      const stripped = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi," ").replace(/<style[^>]*>[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&amp;/g,"&").replace(/&nbsp;/g," ").replace(/\s{2}/g," ").trim();
-      if (stripped.length < 200) throw new Error("Could not extract text — try paste mode.");
-      const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-      if (titleM && !articleTitle) setArticleTitle(titleM[1].replace(/ \| Financial Times/,"").replace(/ - FT\.com/,"").trim());
-      setArticleText(stripped.slice(0, 4000));
-      setFetchStatus("fetched");
-    } catch(e) { setFetchStatus("error"); setError("Fetch failed: " + e.message); }
-  };
-
-  const canAnalyse = articleText.trim().length >= 100;
-
-  const analyseArticle = async ()=>{ if (!canAnalyse) { setError("Need at least 100 characters."); return; }
-    setError(null); setLoading(true);
-    const prompt = "You are a senior equity analyst. Analyse this article.\nInvestment themes: " + themeNames + "\nRespond ONLY with valid JSON (no markdown). Schema: {headline, summary, keyThemes[], source, sentiment, themeImpacts:[{themeTitle, impact, impactScore, reasoning}]}\nsentiment=bullish|bearish|neutral, impactScore=-3 to +3, omit 0-score themes.\n\n" + (articleTitle ? "TITLE: " + articleTitle + "\n" : "") + "TEXT:\n" + articleText.slice(0, 3000);
-    try { const res = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1200, messages:[{role:"user",content:prompt}] })
+  const addArticle = () => {
+    setError(null);
+    setSuccess(false);
+    const txt = jsonInput.trim();
+    if (!txt) { setError("Paste the JSON returned by Claude first."); return; }
+    try {
+      // Strip markdown code fences if present
+      const cleaned = txt.replace(/^```(?:json)?\n?/i, "").replace(/```$/, "").trim();
+      const parsed = JSON.parse(cleaned);
+      if (!parsed.headline) {
+        setError("JSON is missing 'headline' field. Check the format.");
+        return;
+      }
+      onNewArticle({
+        ...parsed,
+        source: parsed.source || "FT",
+        id: Date.now(),
+        addedAt: new Date().toISOString(),
       });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error.type+": "+data.error.message);
-      if (!data.content?.[0]?.text) throw new Error("Empty response. Keys: "+Object.keys(data).join(","));
-      const raw = data.content[0].text.trim();
-      const s = raw.indexOf("{"), e2 = raw.lastIndexOf("}");
-      if (s === -1) throw new Error("No JSON found. Got: "+raw.slice(0,200));
-      const parsed = JSON.parse(raw.slice(s, e2+1));
-      if (!parsed.headline) throw new Error("Missing headline. Keys: "+Object.keys(parsed).join(","));
-      onNewArticle({ ...parsed, source:"FT", id:Date.now(), addedAt:new Date().toISOString(), sourceUrl: isUrl(urlInput)?urlInput:null });
-      setUrlInput(""); setArticleText(""); setArticleTitle(""); setFetchStatus(null); setMode("feed");
-    } catch(err) { setError("Error: "+(err.message||String(err))); }
-    finally { setLoading(false); }
+      setJsonInput("");
+      setSuccess(true);
+      setTimeout(() => { setSuccess(false); setMode("feed"); }, 1200);
+    } catch(err) {
+      setError("Invalid JSON: " + (err.message || String(err)));
+    }
   };
-
-  const impactColour = score => score >= 2 ? {text:"#16a34a",bg:"#dcfce7",label:"▲ Bullish"} : score===1 ? {text:"#65a30d",bg:"#f0fdf4",label:"▲ Mild Bullish"} : score===0 ? {text:"#64748b",bg:"#f1f5f9",label:"→ Neutral"} : score===-1 ? {text:"#d97706",bg:"#fef3c7",label:"▼ Mild Bearish"} : {text:"#dc2626",bg:"#fee2e2",label:"▼ Bearish"};
 
   return (
-    <div style={{ marginBottom:28 }}> <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}> <div style={{ fontFamily:"'DM Mono',monospace",fontSize:10,color:"#94a3b8",letterSpacing:"0.1em",textTransform:"uppercase" }}> FT Intelligence Feed {analysedArticles.length > 0 && <span style={{ marginLeft:8,background:"#dc2626",color:"#fff",borderRadius:10,padding:"1px 7px",fontSize:10 }}>{analysedArticles.length}</span>}
-        </div> <button onClick={()=>{ setMode(mode==="input"?"feed":"input"); setError(null); }} style={{ background:mode==="input"?"#6b5240":"#f1f5f9",color:mode==="input"?"#fff":"#5c4a32",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700 }}> {mode==="input"?"Cancel":"Add Article"}
-        </button> </div> {mode==="input" && (
-        <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:14,marginBottom:14,animation:"fadeIn 0.2s ease" }}> <div style={{ display:"flex",background:"#f1f5f9",borderRadius:10,padding:3,marginBottom:12 }}> {[{id:"url",label:" Gift Link"},{id:"text",label:"Paste Text"}].map(m => (
-              <button key={m.id} onClick={()=>{ setInputMode(m.id); setError(null); setFetchStatus(null); }} style={{ flex:1,padding:"7px",border:"none",borderRadius:8,background:inputMode===m.id?"#fff":"transparent",color:inputMode===m.id?"#3d2e1e":"#8c7355",fontWeight:inputMode===m.id?700:500,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",boxShadow:inputMode===m.id?"0 1px 3px #0002":"none" }}>{m.label}</button> ))}
-          </div> {inputMode==="url" && (
-            <div> <div style={{ fontSize:11,color:"#64748b",marginBottom:8 }}>Paste an FT gift link or any article URL.</div> <div style={{ display:"flex",gap:8,marginBottom:8 }}> <input value={urlInput} onChange={e=>{ setUrlInput(e.target.value); setFetchStatus(null); setArticleText(""); }} placeholder="https://ft.com/content/…"
-                  style={{ flex:1,padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:12,outline:"none",background:"#f8fafc",fontFamily:"'Sora',sans-serif" }} /> <button onClick={fetchFromUrl} disabled={!urlInput.trim()||fetchStatus==="fetching"} style={{ background:fetchStatus==="fetched"?"#16a34a":"#6b5240",color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700 }}> {fetchStatus==="fetching"?"⏳":fetchStatus==="fetched"?"":"Fetch"}
-                </button> </div> {fetchStatus==="fetched" && <div style={{ padding:"7px 11px",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:8,fontSize:11,color:"#15803d",marginBottom:8 }}> {articleText.length} chars extracted{articleTitle?" — "+articleTitle.slice(0,50):""}</div>}
-            </div> )}
+    <div style={{ marginBottom:28 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+        <div style={{ fontFamily:"'DM Mono',monospace", fontSize:10, color:"#94a3b8", letterSpacing:"0.1em", textTransform:"uppercase" }}>
+          News Intelligence Feed {analysedArticles.length > 0 && (
+            <span style={{ marginLeft:8, background:"#6b5240", color:"#fff", borderRadius:10, padding:"1px 7px", fontSize:10 }}>
+              {analysedArticles.length}
+            </span>
+          )}
+        </div>
+        <button onClick={() => { setMode(mode === "input" ? "feed" : "input"); setError(null); }}
+          style={{ background: mode === "input" ? "#6b5240" : "#ede8de", color: mode === "input" ? "#fff" : "#5c4a32",
+                   border:"none", borderRadius:8, padding:"6px 12px", fontSize:11, cursor:"pointer",
+                   fontFamily:"'DM Mono',monospace", fontWeight:700 }}>
+          {mode === "input" ? "Cancel" : "+ Add Article"}
+        </button>
+      </div>
 
-          {inputMode==="text" && (
-            <div> <input value={articleTitle} onChange={e => setArticleTitle(e.target.value)} placeholder="Headline (optional)"
-                style={{ width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:12,marginBottom:8,outline:"none",background:"#f8fafc",fontFamily:"'Sora',sans-serif" }} /> <textarea value={articleText} onChange={e => setArticleText(e.target.value)} placeholder="Paste article text here…" rows={6}
-                style={{ width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:12,resize:"vertical",outline:"none",background:"#f8fafc",lineHeight:1.5,fontFamily:"'Sora',sans-serif" }} /> <div style={{ fontSize:10,color:"#94a3b8",marginTop:3 }}>{articleText.length} chars</div> </div> )}
+      {mode === "input" && (
+        <div style={{ background:"#fff", border:"1px solid #e5e0d5", borderRadius:16, padding:14, marginBottom:14, animation:"fadeIn 0.2s ease" }}>
+          <div style={{ fontSize:13, fontWeight:700, color:"#1a1a1a", marginBottom:4 }}>Paste Claude-analysed JSON</div>
+          <div style={{ fontSize:11, color:"#7a7060", lineHeight:1.6, marginBottom:10 }}>
+            Send your FT article (gift link or text) to Claude in a separate chat. Ask it to return
+            the analysis as JSON in the Track My Portfolio format. Paste the JSON below.
+          </div>
+          <textarea
+            value={jsonInput}
+            onChange={e => { setJsonInput(e.target.value); setError(null); }}
+            placeholder={'{\n  "headline": "...",\n  "summary": "...",\n  "sentiment": "bullish",\n  "themeImpacts": [...],\n  "signals": [...]\n}'}
+            rows={10}
+            style={{ width:"100%", padding:"10px 12px", border:"1px solid #e5e0d5", borderRadius:9, fontSize:12,
+                     resize:"vertical", outline:"none", background:"#faf8f3", lineHeight:1.5,
+                     fontFamily:"'DM Mono',monospace", color:"#1a1a1a" }} />
+          <div style={{ fontSize:10, color:"#a09880", marginTop:3 }}>{jsonInput.length} chars</div>
 
-          <div style={{ display:"flex",justifyContent:"flex-end",marginTop:10 }}> <button onClick={analyseArticle} disabled={loading||!canAnalyse} style={{ background:(loading||!canAnalyse)?"#94a3b8":"#6b5240",color:"#fff",border:"none",borderRadius:9,padding:"10px 20px",fontSize:13,cursor:(loading||!canAnalyse)?"not-allowed":"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}> {loading ? <><span style={{ display:"inline-block",width:12,height:12,border:"2px solid #fff",borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.8s linear infinite" }}/> Analysing…</> : "Analyse with Claude"}
-            </button> </div> {error && <div style={{ marginTop:8,padding:"9px 11px",background:"#fee2e2",borderRadius:8,fontSize:11,color:"#dc2626",lineHeight:1.5,wordBreak:"break-word",fontFamily:"monospace" }}>{error}</div>}
-          <div style={{ marginTop:8,fontSize:10,color:"#94a3b8" }}>URL mode uses allorigins.win CORS proxy. If it fails, use paste mode.</div> </div> )}
+          <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:10 }}>
+            <button onClick={addArticle} disabled={!jsonInput.trim()}
+              style={{ background: !jsonInput.trim() ? "#94a3b8" : "#6b5240", color:"#fff", border:"none",
+                       borderRadius:9, padding:"10px 20px", fontSize:13,
+                       cursor: !jsonInput.trim() ? "not-allowed" : "pointer",
+                       fontFamily:"'DM Mono',monospace", fontWeight:700 }}>
+              {success ? "✓ Added" : "Save Article"}
+            </button>
+          </div>
+          {error && (
+            <div style={{ marginTop:10, padding:"9px 12px", background:"#fee2e2", borderRadius:8,
+                          fontSize:11, color:"#dc2626", wordBreak:"break-word", fontFamily:"monospace", lineHeight:1.5 }}>
+              {error}
+            </div>
+          )}
+        </div>
+      )}
 
-      {mode==="feed" && analysedArticles.length===0 && (
-        <div style={{ background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:16,padding:"28px 16px",textAlign:"center" }}> <div style={{ fontSize:28,marginBottom:6 }}></div> <div style={{ fontSize:13,fontWeight:700,color:"#334155",marginBottom:4 }}>No articles yet</div> <div style={{ fontSize:12,color:"#e8d9c4",lineHeight:1.5 }}>Add an FT article via gift link or paste the text. Claude maps the impact to each investment theme.</div> </div> )}
-      {mode==="feed" && analysedArticles.length>0 && <div>{analysedArticles.map(a => <ArticleCard key={a.id} article={a} impactColour={impactColour} />)}</div>}
-    </div> );
+      {mode === "feed" && analysedArticles.length === 0 && (
+        <div style={{ background:"#faf8f3", border:"1px dashed #d5cec0", borderRadius:16, padding:"28px 16px", textAlign:"center" }}>
+          <div style={{ fontSize:13, fontWeight:700, color:"#3a3020", marginBottom:4 }}>No articles yet</div>
+          <div style={{ fontSize:12, color:"#a09880", lineHeight:1.5 }}>
+            Send articles to Claude separately, then paste the JSON output here to build your signal history.
+          </div>
+        </div>
+      )}
+
+      {mode === "feed" && analysedArticles.length > 0 && (
+        <div>
+          {analysedArticles.map(a => <ArticleCard key={a.id} article={a} impactColour={impactColour} />)}
+        </div>
+      )}
+    </div>
+  );
 }
 
 
@@ -487,76 +636,186 @@ function AddThemeForm({ onAdd, onCancel }) { const [title, setTitle] = useState(
 
 
 
-function PortfolioTracker() { const [holdings, setHoldings] = useState([]);
-  const [uploading, setUploading] = useState(false);
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION: PORTFOLIO TRACKER — PASTE PRE-EXTRACTED HOLDINGS JSON
+// ═════════════════════════════════════════════════════════════════════════════
+// Send a screenshot of your brokerage app to Claude (separately, e.g. claude.ai)
+// and ask it to extract holdings as JSON. Paste the JSON here.
+//
+// Expected shape: an array of objects, each looking like:
+//   [
+//     {
+//       "ticker": "AAPL",
+//       "name": "Apple Inc.",
+//       "shares": "10",
+//       "avgCost": "$150.00",
+//       "currentValue": "$2,000.00",
+//       "gainLoss": "+$500.00",
+//       "currency": "$"
+//     }
+//   ]
+// ═════════════════════════════════════════════════════════════════════════════
+function PortfolioTracker() {
+  const [holdings, setHoldings] = useState([]);
+  const [jsonInput, setJsonInput] = useState("");
+  const [view, setView] = useState("holdings"); // "holdings" | "input"
   const [error, setError] = useState(null);
-  const [view, setView] = useState("holdings");
+  const [success, setSuccess] = useState(false);
 
-  const handleImage = async (e) => { const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true); setError(null);
-    try { const base64 = await new Promise((res, rej) => { const r = new FileReader();
-        r.onload = () => res(r.result.split(",")[1]);
-        r.onerror = rej;
-        r.readAsDataURL(file);
+  const addHoldings = () => {
+    setError(null);
+    setSuccess(false);
+    const txt = jsonInput.trim();
+    if (!txt) { setError("Paste the JSON returned by Claude first."); return; }
+    try {
+      const cleaned = txt.replace(/^```(?:json)?\n?/i, "").replace(/```$/, "").trim();
+      const parsed = JSON.parse(cleaned);
+      if (!Array.isArray(parsed)) {
+        setError("Expected a JSON array of holdings. Got: " + (typeof parsed));
+        return;
+      }
+      if (parsed.length === 0) {
+        setError("Array is empty — no holdings to add.");
+        return;
+      }
+      setHoldings(prev => {
+        const existing = new Set(prev.map(h => h.ticker));
+        const newOnes = parsed.filter(h => h.ticker && !existing.has(h.ticker));
+        return [...prev, ...newOnes.map(h => ({
+          ...h,
+          id: Date.now() + Math.random(),
+          addedAt: new Date().toISOString()
+        }))];
       });
-      const prompt = "Analyse this investment portfolio screenshot. Extract every holding and respond ONLY with a JSON array, no markdown. Each item: {ticker, name, shares, avgCost, currentValue, gainLoss, currency}. Use empty string for missing fields.";
-      const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1500, messages: [{ role: "user", content: [ { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } }, { type: "text", text: prompt }
-          ]}]
-        })
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error.type + ": " + data.error.message);
-      if (!data.content?.[0]?.text) throw new Error("Empty response");
-      const raw = data.content[0].text.trim();
-      const s = raw.indexOf("["), e2 = raw.lastIndexOf("]");
-      if (s === -1) throw new Error("No holdings found. Claude said: " + raw.slice(0, 150));
-      const parsed = JSON.parse(raw.slice(s, e2 + 1));
-      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("No holdings extracted from screenshot.");
-      setHoldings(prev => { const existing = new Set(prev.map(h => h.ticker));
-        const newOnes = parsed.filter(h => !existing.has(h.ticker));
-        return [...prev, ...newOnes.map(h => ({ ...h, id: Date.now() + Math.random(), addedAt: new Date().toISOString() }))];
-      });
-      setView("holdings");
-    } catch(err) { setError("Error: " + (err.message || String(err))); }
-    finally { setUploading(false); }
+      setJsonInput("");
+      setSuccess(true);
+      setTimeout(() => { setSuccess(false); setView("holdings"); }, 1200);
+    } catch(err) {
+      setError("Invalid JSON: " + (err.message || String(err)));
+    }
   };
 
-  const totalValue = holdings.reduce((sum, h) => { const v = parseFloat((h.currentValue || "").replace(/[^0-9.-]/g, ""));
+  const totalValue = holdings.reduce((sum, h) => {
+    const v = parseFloat((h.currentValue || "").replace(/[^0-9.-]/g, ""));
     return sum + (isNaN(v) ? 0 : v);
   }, 0);
 
   return (
-    <div style={{ paddingBottom:20 }}> <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}> <div style={{ fontFamily:"'DM Mono',monospace", fontSize:10, color:"#a09880", letterSpacing:"0.1em", textTransform:"uppercase" }}> My Holdings {holdings.length > 0 && <span style={{ marginLeft:6, background:"#6b5240", color:"#faf8f3", borderRadius:8, padding:"1px 7px", fontSize:9 }}>{holdings.length}</span>}
-        </div> <button onClick={() => { setView(view === "upload" ? "holdings" : "upload"); setError(null); }}
-          style={{ background:view==="upload"?"#6b5240":"#ede8de", color:view==="upload"?"#fdf9f3":"#5c4a32", border:"none", borderRadius:8, padding:"6px 14px", fontSize:11, cursor:"pointer", fontFamily:"'DM Mono',monospace", fontWeight:700 }}> {view === "upload" ? "Cancel" : "+ Upload Screenshot"}
-        </button> </div> {view === "upload" && (
-        <div style={{ background:"#fff", border:"1px solid #e5e0d5", borderRadius:16, padding:16, marginBottom:14 }}> <div style={{ fontSize:13, fontWeight:700, color:"#1a1a1a", marginBottom:6 }}>Upload Portfolio Screenshot</div> <div style={{ fontSize:12, color:"#7a7060", lineHeight:1.6, marginBottom:14 }}> Screenshot your brokerage app (Barclays, HL, IBKR, Trading 212, etc.) showing holdings. Claude extracts tickers, shares, average cost and P&L automatically.
-          </div> <label style={{ display:"block", border:"2px dashed #d5cec0", borderRadius:12, padding:"28px 16px", textAlign:"center", cursor:"pointer", background:"#faf8f3" }}> <input type="file" accept="image/*" onChange={handleImage} style={{ display:"none" }} /> {uploading ? (
-              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:10 }}> <span style={{ display:"inline-block", width:20, height:20, border:"2px solid #1a1a1a", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.8s linear infinite" }} /> <span style={{ fontSize:12, color:"#7a7060" }}>Analysing with Claude...</span> </div> ) : (
-              <div> <div style={{ fontSize:13, fontWeight:600, color:"#1a1a1a", marginBottom:4 }}>Tap to upload screenshot</div> <div style={{ fontSize:11, color:"#a09880" }}>JPG, PNG or HEIC · from camera roll or camera</div> </div> )}
-          </label> {error && <div style={{ marginTop:10, padding:"9px 12px", background:"#fee2e2", borderRadius:8, fontSize:11, color:"#dc2626", wordBreak:"break-word", fontFamily:"monospace", lineHeight:1.5 }}>{error}</div>}
-        </div> )}
+    <div style={{ paddingBottom:20 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+        <div style={{ fontFamily:"'DM Mono',monospace", fontSize:10, color:"#a09880", letterSpacing:"0.1em", textTransform:"uppercase" }}>
+          My Holdings {holdings.length > 0 && (
+            <span style={{ marginLeft:6, background:"#6b5240", color:"#fdf9f3", borderRadius:8, padding:"1px 7px", fontSize:9 }}>
+              {holdings.length}
+            </span>
+          )}
+        </div>
+        <button onClick={() => { setView(view === "input" ? "holdings" : "input"); setError(null); }}
+          style={{ background: view === "input" ? "#6b5240" : "#ede8de", color: view === "input" ? "#fdf9f3" : "#5c4a32",
+                   border:"none", borderRadius:8, padding:"6px 14px", fontSize:11, cursor:"pointer",
+                   fontFamily:"'DM Mono',monospace", fontWeight:700 }}>
+          {view === "input" ? "Cancel" : "+ Add Holdings"}
+        </button>
+      </div>
+
+      {view === "input" && (
+        <div style={{ background:"#fff", border:"1px solid #e5e0d5", borderRadius:16, padding:16, marginBottom:14 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:"#1a1a1a", marginBottom:4 }}>Paste Claude-extracted holdings</div>
+          <div style={{ fontSize:12, color:"#7a7060", lineHeight:1.6, marginBottom:14 }}>
+            Send your brokerage screenshot to Claude (in a separate chat), ask it to extract
+            holdings as a JSON array, and paste the JSON below.
+          </div>
+          <textarea
+            value={jsonInput}
+            onChange={e => { setJsonInput(e.target.value); setError(null); }}
+            placeholder={'[\n  {\n    "ticker": "AAPL",\n    "name": "Apple Inc.",\n    "shares": "10",\n    "avgCost": "$150.00",\n    "currentValue": "$2,000.00",\n    "gainLoss": "+$500.00"\n  }\n]'}
+            rows={10}
+            style={{ width:"100%", padding:"10px 12px", border:"1px solid #e5e0d5", borderRadius:9, fontSize:12,
+                     resize:"vertical", outline:"none", background:"#faf8f3", lineHeight:1.5,
+                     fontFamily:"'DM Mono',monospace", color:"#1a1a1a" }} />
+          <div style={{ fontSize:10, color:"#a09880", marginTop:3 }}>{jsonInput.length} chars</div>
+          <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:10 }}>
+            <button onClick={addHoldings} disabled={!jsonInput.trim()}
+              style={{ background: !jsonInput.trim() ? "#94a3b8" : "#6b5240", color:"#fff", border:"none",
+                       borderRadius:9, padding:"10px 20px", fontSize:13,
+                       cursor: !jsonInput.trim() ? "not-allowed" : "pointer",
+                       fontFamily:"'DM Mono',monospace", fontWeight:700 }}>
+              {success ? "✓ Added" : "Save Holdings"}
+            </button>
+          </div>
+          {error && (
+            <div style={{ marginTop:10, padding:"9px 12px", background:"#fee2e2", borderRadius:8,
+                          fontSize:11, color:"#dc2626", wordBreak:"break-word", fontFamily:"monospace", lineHeight:1.5 }}>
+              {error}
+            </div>
+          )}
+        </div>
+      )}
 
       {view === "holdings" && holdings.length === 0 && (
-        <div style={{ background:"#faf8f3", border:"1px dashed #d5cec0", borderRadius:16, padding:"32px 16px", textAlign:"center" }}> <div style={{ fontSize:13, fontWeight:600, color:"#3a3020", marginBottom:6 }}>No holdings yet</div> <div style={{ fontSize:12, color:"#a09880", lineHeight:1.5 }}>Upload a screenshot of your brokerage account and Claude will extract your positions automatically.</div> </div> )}
+        <div style={{ background:"#faf8f3", border:"1px dashed #d5cec0", borderRadius:16, padding:"32px 16px", textAlign:"center" }}>
+          <div style={{ fontSize:13, fontWeight:600, color:"#3a3020", marginBottom:6 }}>No holdings yet</div>
+          <div style={{ fontSize:12, color:"#a09880", lineHeight:1.5 }}>
+            Send a screenshot of your brokerage account to Claude in a separate chat, ask it
+            to extract holdings as JSON, and paste the output here.
+          </div>
+        </div>
+      )}
 
       {view === "holdings" && holdings.length > 0 && (
-        <div> {totalValue > 0 && (
-            <div style={{ background:"#6b5240", borderRadius:12, padding:"12px 16px", marginBottom:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}> <span style={{ fontSize:11, color:"#a09880", fontFamily:"'DM Mono',monospace", textTransform:"uppercase", letterSpacing:"0.06em" }}>Total Value</span> <span style={{ fontSize:18, fontWeight:700, color:"#faf8f3", fontFamily:"'DM Mono',monospace" }}> {holdings[0]?.currency || "£"}{totalValue.toLocaleString("en-GB", { minimumFractionDigits:2, maximumFractionDigits:2 })}
-              </span> </div> )}
+        <div>
+          {totalValue > 0 && (
+            <div style={{ background:"#6b5240", borderRadius:12, padding:"12px 16px", marginBottom:14,
+                          display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontSize:11, color:"#e8d9c4", fontFamily:"'DM Mono',monospace",
+                             textTransform:"uppercase", letterSpacing:"0.06em" }}>Total Value</span>
+              <span style={{ fontSize:18, fontWeight:700, color:"#fdf9f3", fontFamily:"'DM Mono',monospace" }}>
+                {holdings[0]?.currency || "£"}{totalValue.toLocaleString("en-GB", { minimumFractionDigits:2, maximumFractionDigits:2 })}
+              </span>
+            </div>
+          )}
           {holdings.map(h => (
-            <div key={h.id} style={{ background:"#fff", border:"1px solid #e5e0d5", borderRadius:14, padding:"13px 15px", marginBottom:10 }}> <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:4 }}> <div> <span style={{ fontFamily:"'DM Mono',monospace", fontWeight:700, fontSize:14, color:"#1a1a1a" }}>{h.ticker || "—"}</span> {h.name && <div style={{ fontSize:12, color:"#3a3020", fontWeight:600, marginTop:2 }}>{h.name}</div>}
-                </div> <button onClick={() => setHoldings(prev => prev.filter(x => x.id !== h.id))}
-                  style={{ background:"#f4f1ea", border:"none", borderRadius:6, padding:"3px 8px", fontSize:10, cursor:"pointer", color:"#7a7060", fontFamily:"'DM Mono',monospace" }}> Remove
-                </button> </div> <div style={{ display:"flex", gap:16, marginTop:8, flexWrap:"wrap" }}> {[["Shares", h.shares], ["Avg Cost", h.avgCost], ["Value", h.currentValue]].map(([label, val]) => val ? (
-                  <div key={label}> <div style={{ fontSize:9, color:"#a09880", fontFamily:"'DM Mono',monospace", textTransform:"uppercase", letterSpacing:"0.06em" }}>{label}</div> <div style={{ fontSize:13, fontWeight:700, color:"#1a1a1a" }}>{val}</div> </div> ) : null)}
+            <div key={h.id} style={{ background:"#fff", border:"1px solid #e5e0d5", borderRadius:14, padding:"13px 15px", marginBottom:10 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:4 }}>
+                <div>
+                  <span style={{ fontFamily:"'DM Mono',monospace", fontWeight:700, fontSize:14, color:"#1a1a1a" }}>
+                    {h.ticker || "—"}
+                  </span>
+                  {h.name && <div style={{ fontSize:12, color:"#3a3020", fontWeight:600, marginTop:2 }}>{h.name}</div>}
+                </div>
+                <button onClick={() => setHoldings(prev => prev.filter(x => x.id !== h.id))}
+                  style={{ background:"#f4f1ea", border:"none", borderRadius:6, padding:"3px 8px", fontSize:10,
+                           cursor:"pointer", color:"#7a7060", fontFamily:"'DM Mono',monospace" }}>
+                  Remove
+                </button>
+              </div>
+              <div style={{ display:"flex", gap:16, marginTop:8, flexWrap:"wrap" }}>
+                {[["Shares", h.shares], ["Avg Cost", h.avgCost], ["Value", h.currentValue]].map(([label, val]) => val ? (
+                  <div key={label}>
+                    <div style={{ fontSize:9, color:"#a09880", fontFamily:"'DM Mono',monospace", textTransform:"uppercase", letterSpacing:"0.06em" }}>{label}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#1a1a1a" }}>{val}</div>
+                  </div>
+                ) : null)}
                 {h.gainLoss && (
-                  <div> <div style={{ fontSize:9, color:"#a09880", fontFamily:"'DM Mono',monospace", textTransform:"uppercase", letterSpacing:"0.06em" }}>P&L</div> <div style={{ fontSize:13, fontWeight:700, color: h.gainLoss.startsWith("-") ? "#dc2626":"#4a7c35" }}>{h.gainLoss}</div> </div> )}
-              </div> </div> ))}
-          <button onClick={() => setView("upload")} style={{ width:"100%", padding:12, border:"2px dashed #d5cec0", borderRadius:12, background:"transparent", color:"#7a7060", fontSize:12, cursor:"pointer", fontFamily:"'DM Mono',monospace" }}> + Upload another screenshot
-          </button> </div> )}
-    </div> );
+                  <div>
+                    <div style={{ fontSize:9, color:"#a09880", fontFamily:"'DM Mono',monospace", textTransform:"uppercase", letterSpacing:"0.06em" }}>P&L</div>
+                    <div style={{ fontSize:13, fontWeight:700, color: h.gainLoss.startsWith("-") ? "#dc2626" : "#4a7c35" }}>
+                      {h.gainLoss}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          <button onClick={() => setView("input")}
+            style={{ width:"100%", padding:12, border:"2px dashed #d5cec0", borderRadius:12, background:"transparent",
+                     color:"#7a7060", fontSize:12, cursor:"pointer", fontFamily:"'DM Mono',monospace" }}>
+            + Paste more holdings
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 
@@ -579,7 +838,7 @@ export default function App() { const [selected, setSelected] = useState(null);
     return t.broadGroup === activeFilter;
   });
 
-  const tabs = [ { id: "themes", label: "Themes"    }, { id: "portfolio", label: "Portfolio" }, { id: "news", label: "FT Intel"  }, { id: "scenarios", label: "Scenarios" }, ];
+  const tabs = [ { id: "themes", label: "Themes"    }, { id: "portfolio", label: "Portfolio" }, { id: "news", label: "News Intel"  }, { id: "scenarios", label: "Scenarios" }, ];
 
   return (
     <div style={{ minHeight:"100vh",background:"#faf8f3",fontFamily:"'Sora',sans-serif" }}> <style>{`

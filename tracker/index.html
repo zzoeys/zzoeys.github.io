@@ -117,20 +117,44 @@ function useLivePrices(tickers) {
   const [prices, setPrices] = useState({});
   const [loading, setLoading] = useState(false);
 
+  // ─── Cache config ──────────────────────────────────────────────────────────
+  // Prices are stored in localStorage so refreshing the page doesn't burn
+  // API calls. Cache TTL: 1 hour during market hours (fine for personal use).
+  // Twelve Data free tier: 800 calls/day, 8 calls/minute.
+  const CACHE_KEY = 'tmp_price_cache';
+  const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
   useEffect(() => {
     if (!tickers || tickers.length === 0) return;
     let cancelled = false;
 
     const fetchPrices = async () => {
+      // ── Step 1: Check localStorage cache ────────────────────────────────
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (raw) {
+          const cached = JSON.parse(raw);
+          const age = Date.now() - (cached.timestamp || 0);
+          if (age < CACHE_TTL_MS && cached.data) {
+            const allCached = tickers.every(sym => cached.data[sym]);
+            if (allCached) {
+              console.log('Using cached prices (age:', Math.round(age / 60000), 'min)');
+              if (!cancelled) setPrices(prev => ({ ...prev, ...cached.data }));
+              return; // skip API calls entirely
+            }
+          }
+        }
+      } catch(e) { /* ignore cache errors, proceed to fetch */ }
+
       setLoading(true);
       try {
-        // ── Step 1: Current quote for all tickers in one call ──────────
+        // ── Step 2: Current quote (price for all tickers in one call) ────
         const symbols = tickers.join(",");
         const quoteRes = await fetch(`${WORKER_URL}/quote?symbols=${encodeURIComponent(symbols)}`);
         if (!quoteRes.ok) throw new Error("Quote fetch failed: " + quoteRes.status);
         const quoteData = await quoteRes.json();
 
-        // Twelve Data returns a single object for 1 ticker, nested object for multiple
+        // Twelve Data returns a flat object for 1 ticker, nested for multiple
         const quotes = {};
         if (tickers.length === 1 && quoteData.symbol) {
           quotes[quoteData.symbol] = quoteData;
@@ -138,49 +162,72 @@ function useLivePrices(tickers) {
           Object.assign(quotes, quoteData);
         }
 
-        // ── Step 2: 1-month return per ticker ─────────────────────────
-        // Fetch last ~23 trading days (1 calendar month ≈ 21-23 trading days)
-        // Compare first close in that window vs latest close = 1M return
-        const mtdMap = {};
+        // ── Step 3: Time series from Jan 1 of this year ──────────────────
+        // One call per ticker gives us:
+        //   YTD   = (latest close - first close of year) / first close of year
+        //   1M    = (latest close - close 23 trading days ago) / that close
+        const now = new Date();
+        const yearStart = `${now.getFullYear()}-01-01`;
+        const returnsMap = {};
+
         await Promise.all(tickers.map(async (sym) => {
           try {
-            const tsRes = await fetch(`${WORKER_URL}/timeseries/${encodeURIComponent(sym)}`);
+            const tsRes = await fetch(
+              `${WORKER_URL}/timeseries/${encodeURIComponent(sym)}?start_date=${yearStart}`
+            );
             if (!tsRes.ok) return;
             const tsData = await tsRes.json();
-            const values = tsData?.values;
+            const values = tsData?.values; // newest-first
             if (!values || values.length < 2) return;
 
-            // Twelve Data returns values newest-first
-            // values[0] = today, values[last] = ~1 month ago
             const latestClose = parseFloat(values[0].close);
-            const oneMonthAgoClose = parseFloat(values[values.length - 1].close);
 
-            if (latestClose && oneMonthAgoClose) {
-              const pct = ((latestClose - oneMonthAgoClose) / oneMonthAgoClose) * 100;
-              mtdMap[sym] = pct;
-              console.log(`${sym} 1M: ${oneMonthAgoClose.toFixed(2)} → ${latestClose.toFixed(2)} = ${pct.toFixed(2)}%`);
-            }
+            // YTD baseline: last entry = first trading day of the year
+            const ytdBaseline = parseFloat(values[values.length - 1].close);
+            const ytdPct = ((latestClose - ytdBaseline) / ytdBaseline) * 100;
+
+            // 1M baseline: entry ~23 trading days ago (≈ 1 calendar month)
+            const oneMIdx = Math.min(22, values.length - 1);
+            const oneMBaseline = parseFloat(values[oneMIdx].close);
+            const oneMPct = ((latestClose - oneMBaseline) / oneMBaseline) * 100;
+
+            returnsMap[sym] = { ytdPct, oneMPct };
+            console.log(`${sym} | YTD: ${ytdPct.toFixed(1)}% | 1M: ${oneMPct.toFixed(1)}%`);
           } catch(e) {
-            console.warn("Time series fetch failed for " + sym + ":", e.message);
+            console.warn(`Time series failed for ${sym}:`, e.message);
           }
         }));
 
-        // ── Step 3: Build the prices map ──────────────────────────────
+        // ── Step 4: Build the prices map ─────────────────────────────────
         if (!cancelled) {
           const map = {};
           tickers.forEach(sym => {
             const q = quotes[sym];
-            const pct = mtdMap[sym];
-            if (q && !q.code) {
+            const r = returnsMap[sym];
+            if (q && !q.code) { // q.code exists on Twelve Data error responses
               map[sym] = {
-                price: q.close ? `$${parseFloat(q.close).toFixed(2)}` : null,
-                ytd: pct != null ? `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%` : null,
-                mktCap: null,
+                price:  q.close ? `$${parseFloat(q.close).toFixed(2)}` : null,
+                oneM:   r?.oneMPct != null
+                          ? `${r.oneMPct >= 0 ? "+" : ""}${r.oneMPct.toFixed(2)}%`
+                          : null,
+                ytd:    r?.ytdPct != null
+                          ? `${r.ytdPct >= 0 ? "+" : ""}${r.ytdPct.toFixed(2)}%`
+                          : null,
                 live: true,
               };
             }
           });
-          setPrices(map);
+          setPrices(prev => ({ ...prev, ...map }));
+
+          // ── Step 5: Write to localStorage cache ───────────────────────
+          try {
+            const existing = JSON.parse(localStorage.getItem(CACHE_KEY) || '{"data":{}}');
+            localStorage.setItem(CACHE_KEY, JSON.stringify({
+              timestamp: Date.now(),
+              data: { ...existing.data, ...map }
+            }));
+            console.log('Prices cached to localStorage');
+          } catch(e) { /* localStorage full or disabled — safe to ignore */ }
         }
       } catch(e) {
         console.warn("Twelve Data fetch failed:", e.message);
@@ -230,14 +277,47 @@ function ETFCard({ etf }) {
     </div>
   );
 }
-function StockCard({ stock, liveData }) { const live = liveData || {};
+function StockCard({ stock, liveData }) {
+  const live = liveData || {};
+  // top-right badge: 1M return when live, nothing when not
+  const displayOneM  = live.oneM  || null;
+  // bottom stats row: live YTD when available, hardcoded as fallback
+  const displayYtd   = live.ytd   || stock.ytd;
   const displayPrice = live.price || stock.price;
-  const displayYtd = live.ytd || stock.ytd;
-  const displayMktCap = live.mktCap || stock.mktCap;
-  const pos = displayYtd ? displayYtd.startsWith("+") : true;
+  const oneMPos = displayOneM ? displayOneM.startsWith("+") : true;
+  const ytdPos  = displayYtd  ? displayYtd.startsWith("+")  : true;
+
   return (
-    <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",marginBottom:10 }}> <div style={{ display:"flex",justifyContent:"space-between",marginBottom:2 }}> <span style={{ fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:14,color:"#0f172a" }}>{stock.ticker}</span> <span title={live.live ? "Month-to-date performance (live from Yahoo Finance)" : "Year-to-date — live MTD loading..."} style={{ fontFamily:"'DM Mono',monospace",fontSize:13,fontWeight:700,color:pos ? "#16a34a":"#dc2626",cursor:"help" }}>{displayYtd} {live.live ? "MTD" : "YTD"}</span> </div> <div style={{ fontSize:12,fontWeight:600,color:"#334155",marginBottom:2 }}>{stock.name}</div> <div style={{ fontSize:11,color:"#64748b",marginBottom:8,lineHeight:1.5 }}>{stock.desc}</div> <div style={{ display:"flex",gap:20,alignItems:"center",flexWrap:"wrap" }}> <div><div style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>PRICE</div><div style={{ fontSize:12,fontWeight:700,color:"#0f172a" }}>{displayPrice}</div></div> <div><div style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>YTD</div><div style={{ fontSize:12,fontWeight:700,color:stock.ytd && stock.ytd.startsWith("+")?"#16a34a":"#dc2626" }}>{stock.ytd}</div></div> <div><div style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>MKT CAP</div><div style={{ fontSize:12,fontWeight:700,color:"#0f172a" }}>{displayMktCap}</div></div> {live.live && <span style={{ fontSize:9,background:"#dcfce7",color:"#16a34a",borderRadius:4,padding:"2px 5px",fontFamily:"'DM Mono',monospace" }}>LIVE</span>}
-      </div> </div> );
+    <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",marginBottom:10 }}>
+      <div style={{ display:"flex",justifyContent:"space-between",marginBottom:2 }}>
+        <span style={{ fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:14,color:"#0f172a" }}>{stock.ticker}</span>
+        {displayOneM && (
+          <span title="1-month return (live)" style={{ fontFamily:"'DM Mono',monospace",fontSize:13,fontWeight:700,color:oneMPos?"#16a34a":"#dc2626",cursor:"help" }}>
+            {displayOneM} 1M
+          </span>
+        )}
+      </div>
+      <div style={{ fontSize:12,fontWeight:600,color:"#334155",marginBottom:2 }}>{stock.name}</div>
+      <div style={{ fontSize:11,color:"#64748b",marginBottom:8,lineHeight:1.5 }}>{stock.desc}</div>
+      <div style={{ display:"flex",gap:20,alignItems:"center",flexWrap:"wrap" }}>
+        <div>
+          <div style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>PRICE</div>
+          <div style={{ fontSize:12,fontWeight:700,color:"#0f172a" }}>{displayPrice}</div>
+        </div>
+        <div>
+          <div style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>YTD</div>
+          <div style={{ fontSize:12,fontWeight:700,color:ytdPos?"#16a34a":"#dc2626" }}>{displayYtd}</div>
+        </div>
+        <div>
+          <div style={{ fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace" }}>MKT CAP</div>
+          <div style={{ fontSize:12,fontWeight:700,color:"#0f172a" }}>{stock.mktCap}</div>
+        </div>
+        {live.live && (
+          <span style={{ fontSize:9,background:"#dcfce7",color:"#16a34a",borderRadius:4,padding:"2px 5px",fontFamily:"'DM Mono',monospace" }}>LIVE</span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function ThemeDetail({ theme, onBack, onUpdate }) {

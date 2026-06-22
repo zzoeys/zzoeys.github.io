@@ -34,15 +34,15 @@ const { useState, useEffect, useRef } = React;
 // API CONFIGURATION
 // ═════════════════════════════════════════════════════════════════════════════
 // This is the Cloudflare Worker URL that proxies our API calls.
-// It handles three things on our behalf:
-//   - Yahoo Finance fetches (so we don't hit CORS errors)
-//   - Anthropic API calls (so our API key stays secret on the worker)
+// It proxies Twelve Data API calls on our behalf.
+// Your TWELVE_DATA_KEY secret lives on the Worker — never exposed to the browser.
 //
 // If you redeploy the worker to a new URL, change this constant.
 // If the worker is broken, the app falls back to the hardcoded data.
 //
 // To test the worker yourself, paste this into your browser:
 //   https://YOUR-WORKER.workers.dev/quote?symbols=AAPL
+//   Should return JSON with AAPL price data.
 const WORKER_URL = "https://tracker-api.zzoeysoh.workers.dev";
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -68,11 +68,6 @@ const themes = [ { id: "photonics", label: "Trending", labelColor: "#16a34a", la
       "Hyperscaler capex guidance raised every quarter since 2023",
       "GPU cluster demand structurally exceeds supply through 2026",
       "Sovereign AI initiatives (UAE, France, Japan) creating new demand centres",
-    ],
-    enablers: [
-      "Tesla Optimus, Figure AI and 1X raising billions — validating humanoid market",
-      "Automotive LiDAR design wins converting from R&D to production revenue",
-      "Industrial automation capex accelerating as labour costs rise globally",
     ]}, { id: "power", label: "Trending", labelColor: "#16a34a", labelBg: "#dcfce7", title: "Power", subtitle: "The new grid", risk: "Moderate", riskDots: 2, broadGroup: "energy", coreGroup: true, thesis: "AI data centres will roughly double US electricity demand growth this decade. Anything that generates, distributes, or cools electrons is in structural undersupply for the first time in 20 years.", stocks: [ { ticker: "VRT", name: "Vertiv Holdings Co.", desc: "Liquid cooling & power infrastructure — direct AI datacentre levered.", ytd: "+79.78%", price: "$315.71", mktCap: "$121.27B" }, { ticker: "GEV", name: "GE Vernova Inc.", desc: "Gas turbines & grid equipment; multi-year backlog.", ytd: "+42.49%", price: "$968.32", mktCap: "$260.21B" }, { ticker: "CEG", name: "Constellation Energy Corporation", desc: "Largest US nuclear fleet; hyperscaler PPA winner.", ytd: "-21.43%", price: "$287.75", mktCap: "$103.93B" }, { ticker: "TE", name: "T1 Energy Inc.", desc: "Power & data connectors for AI servers and grid.", ytd: "+34.69%", price: "$10.56", mktCap: "$2.95B" }, { ticker: "BE", name: "Bloom Energy Corporation", desc: "On-site fuel cells solving datacentre interconnect delays.", ytd: "+188.78%", price: "$285.00", mktCap: "$81.07B" }, ], etfs: [ { ticker: "INFR", name: "iShares Global Infrastructure UCITS ETF", desc: "Utilities, renewables & grid infrastructure.", platform: "Barclays SI", ter: "0.65%" }, { ticker: "INRG", name: "iShares Global Clean Energy UCITS ETF", desc: "Renewables and nuclear exposure (CEG via index).", platform: "Barclays SI", ter: "0.65%" }, ], risks: [ "Turbine & transformer lead times are 4+ years — execution risk is real.", "Valuations on power names already reflect AI narrative; multiple compression risk.", "Regulatory: nuclear PPAs facing FERC scrutiny; grid upgrade approvals slow.", ]}, { id: "space", label: "Catalyst", labelColor: "#d97706", labelBg: "#fef3c7", title: "Space", subtitle: "Orbital economy goes commercial", risk: "High", riskDots: 4, broadGroup: "defence", coreGroup: false, thesis: "Reusable launch has collapsed cost-to-orbit by 10x and direct-to-cell satellite is opening a $100B+ TAM. The space economy is finally moving from defence subsidies to genuine commercial revenue.", stocks: [ { ticker: "ASTS", name: "AST SpaceMobile, Inc.", desc: "Direct-to-phone satellite broadband; Verizon/AT&T deals signed.", ytd: "+35.87%", price: "$113.41", mktCap: "$44.02B" }, { ticker: "RKLB", name: "Rocket Lab Corporation", desc: "Small-launch leader; Neutron rocket targeting medium-lift.", ytd: "+88.81%", price: "$143.48", mktCap: "$83.06B" }, ], etfs: [ { ticker: "SPCE", name: "iShares Space & Aerospace UCITS ETF", desc: "Covers commercial space, defence aerospace, and satellite operators.", platform: "Barclays SI", ter: "0.40%" }, { ticker: "AERO", name: "Invesco Aerospace & Defence UCITS ETF", desc: "Defence tilt but includes launch & satellite names.", platform: "Barclays SI", ter: "0.35%" }, ], risks: [ "Cash burn — most space pure plays are still pre-profitability.", "Launch failures or constellation delays cause 30%+ single-day moves.", "SpaceX (private) dominates launch economics and could undercut commercial peers.", ],
     enablers: [
       "US data centre electricity demand forecast to double by 2030",
@@ -83,11 +78,6 @@ const themes = [ { id: "photonics", label: "Trending", labelColor: "#16a34a", la
       "Government R&D spending: US $800M, EU €1B+ committed through 2027",
       "Pharma and logistics sectors running early commercial pilots",
       "IP moat accumulation — patent filings growing 40% year-on-year",
-    ],
-    enablers: [
-      "Reusable launch reducing cost-to-orbit by 10x vs 2015 baseline",
-      "Direct-to-device satellite broadband opening $100B+ unserved addressable market",
-      "Government constellation contracts (DoD, ESA) providing revenue floor",
     ]}, { id: "entertainment", label: "Contrarian", labelColor: "#7c3aed", labelBg: "#f5f3ff", title: "Experiences", subtitle: "The anti-AI trade", risk: "Moderate", riskDots: 2, broadGroup: "consumer", coreGroup: true, thesis: "AI can write songs, generate images, and simulate conversations — but it cannot replicate the visceral reality of 80,000 people at a concert. Post-pandemic, consumer psychology has structurally shifted toward experiences over possessions.", stocks: [ { ticker: "LYV", name: "Live Nation Entertainment, Inc.", desc: "Vertically integrated live entertainment monopoly — venues, ticketing (Ticketmaster), artist management.", ytd: "+18.2%", price: "$142.50", mktCap: "$32.8B" }, { ticker: "DIS", name: "The Walt Disney Company", desc: "Theme parks (60%+ of operating profit), cruise lines, ESPN live sport. Irreplaceable physical IP.", ytd: "+5.4%", price: "$111.30", mktCap: "$203.4B" }, { ticker: "MGM", name: "MGM Resorts International", desc: "Las Vegas strip resort-casino operator; BetMGM digital complements physical experience moat.", ytd: "+12.1%", price: "$37.80", mktCap: "$11.2B" }, { ticker: "SEAS", name: "SeaWorld Entertainment, Inc.", desc: "Regional theme park operator; capacity constrained, pricing power evident in EBITDA margins.", ytd: "+8.9%", price: "$41.20", mktCap: "$2.1B" }, { ticker: "MSGE", name: "Madison Square Garden Entertainment", desc: "MSG Sphere Las Vegas + NYC venues. Immersive experience format commanding $1,000+ ticket prices.", ytd: "+22.4%", price: "$38.60", mktCap: "$1.8B" }, ], etfs: [ { ticker: "ISPY", name: "iShares S&P 500 Consumer Discretionary UCITS ETF", desc: "Captures DIS, LYV, MGM within consumer disc basket. Cheapest UK route to US entertainment majors. ISA eligible.", platform: "Barclays SI", ter: "0.15%" }, { ticker: "HANZ", name: "WisdomTree Global ex-EM Consumer Disc UCITS ETF", desc: "Global consumer discretionary — includes European leisure names (DUFRY, Accor) alongside US.", platform: "Barclays SI", ter: "0.38%" }, ], risks: [ "Consumer recession risk — experiences are discretionary; spending collapses in downturns faster than essentials.", "Regulatory: Live Nation faces ongoing DOJ antitrust investigation into Ticketmaster monopoly.", "Content strike risk (SAG-AFTRA, WGA) can disrupt Disney IP pipeline and streaming margins.", "Demographic shift — Gen Z streams more, attends less; long-term attendance trends uncertain.", ],
     enablers: [
       "Post-pandemic 'experience premium' structural shift in consumer spending",
@@ -905,8 +895,8 @@ function App() { const [selected, setSelected] = useState(null);
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
       `}</style> <div style={{ maxWidth:480,margin:"0 auto",padding:"0 16px 80px" }}> {!selected ? (
-          <> <div style={{ paddingTop:52,paddingBottom:16 }}> <h1 style={{ fontSize:32,fontWeight:800,color:"#0f172a",lineHeight:1.15,margin:"0 0 6px",letterSpacing:"-0.03em" }}> Track My Portfolio<br /><span style={{ color:"#94a3b8" }}>investment themes & news.</span> </h1> <p style={{ color:"#64748b",fontSize:13,lineHeight:1.6,margin:"0 0 14px" }}> Thesis · FT intelligence · ETF overlap · scenario testing — for UK investors on Barclays Smart Investor.
-              </p> <div style={{ background:"#6b5240",borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:8 }}> <span style={{ fontSize:14 }}></span> <span style={{ fontSize:12,color:"#e8d9c4" }}>UCITS ETFs are ISA & SIPP eligible on Barclays Smart Investor</span> </div> </div> <div style={{ display:"flex",gap:0,marginBottom:20,background:"#ede8de",borderRadius:14,padding:4 }}> {tabs.map(t => (
+          <> <div style={{ paddingTop:52,paddingBottom:16 }}> <h1 style={{ fontSize:32,fontWeight:800,color:"#0f172a",lineHeight:1.15,margin:"0 0 6px",letterSpacing:"-0.03em" }}> Track My Portfolio<br /><span style={{ color:"#94a3b8" }}>investment themes & news.</span> </h1> <p style={{ color:"#64748b",fontSize:13,lineHeight:1.6,margin:"0 0 14px" }}> Thesis · FT intelligence · ETF overlap · scenario testing — built for UK investors.
+              </p> <div style={{ background:"#6b5240",borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:8 }}> <span style={{ fontSize:14 }}></span> <span style={{ fontSize:12,color:"#e8d9c4" }}>UCITS ETFs listed are ISA & SIPP eligible</span> </div> </div> <div style={{ display:"flex",gap:0,marginBottom:20,background:"#ede8de",borderRadius:14,padding:4 }}> {tabs.map(t => (
                 <button key={t.id} onClick={() => setHomeTab(t.id)} style={{ flex:1,padding:"10px 4px",border:"none",borderRadius:10,background:homeTab === t.id ? "#fff":"transparent",color:homeTab === t.id ? "#3d2e1e":"#8c7355",fontWeight:homeTab === t.id ? 700:500,fontSize:11,cursor:"pointer",boxShadow:homeTab === t.id ? "0 1px 4px #0002":"none",fontFamily:"'DM Mono',monospace",transition:"all 0.18s",position:"relative"}}> {t.label}
                   {t.id === "news" && analysedArticles.length > 0 && (
                     <span style={{ position:"absolute",top:4,right:6,background:"#dc2626",color:"#fff",borderRadius:8,fontSize:9,padding:"1px 5px",fontWeight:700 }}>{analysedArticles.length}</span> )}
@@ -940,7 +930,7 @@ function App() { const [selected, setSelected] = useState(null);
 
             {homeTab === "scenarios" && <ScenarioTester />}
 
-            <div style={{ textAlign:"center",fontSize:11,color:"#94a3b8",marginTop:20,lineHeight:1.6 }}> Not investment advice. ETF availability subject to change — verify on Barclays Smart Investor before dealing.
+            <div style={{ textAlign:"center",fontSize:11,color:"#94a3b8",marginTop:20,lineHeight:1.6 }}> Not investment advice. ETF availability subject to change — verify availability before dealing.
             </div> </> ) : (
           <div style={{ paddingTop:52 }}> <ThemeDetail
               theme={themeList.find(t => t.id === selected.id) || selected}

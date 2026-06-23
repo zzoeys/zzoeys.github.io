@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+]<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -95,6 +95,44 @@ const themes = [ { id: "photonics", label: "Trending", labelColor: "#16a34a", la
       "UK industrial REIT undersupply as nearshoring logistics demand accelerates",
     ]}
 ];
+
+// ─── JSON SANITISER ───────────────────────────────────────────────────────────
+// Fixes common GPT JSON output issues before JSON.parse:
+//   1. Strips markdown code fences
+//   2. Converts curly quotes to straight quotes
+//   3. Escapes literal newlines/tabs inside string values
+//   4. Escapes bare double-quotes inside string values
+function sanitiseGPTJson(raw) {
+  var s = raw.trim().replace(/^```(?:json)?\s*/i,"").replace(/\s*```$/,"").trim();
+  s = s.replace(/[\u201C\u201D\u201E\u201F]/g,'"').replace(/[\u2018\u2019\u201A\u201B]/g,"'");
+  var out="", inStr=false, esc=false;
+  for (var i=0; i<s.length; i++) {
+    var c=s[i];
+    if (esc) { out+=c; esc=false; continue; }
+    if (c==="\\" && inStr) { out+=c; esc=true; continue; }
+    if (c==='"') {
+      if (!inStr) { inStr=true; out+=c; }
+      else {
+        var j=i+1;
+        while (j<s.length && (s[j]===" "||s[j]==="\t")) j++;
+        var nc=j<s.length?s[j]:"";
+        if (nc===":"||nc===","||nc==="}"||nc==="]"||nc===""||nc==="\n"||nc==="\r") {
+          inStr=false; out+=c;
+        } else { out+='\\"'; }
+      }
+      continue;
+    }
+    if (inStr) {
+      if (c==="\n") { out+="\\n"; continue; }
+      if (c==="\r") { out+="\\r"; continue; }
+      if (c==="\t") { out+="\\t"; continue; }
+      if (c.charCodeAt(0)<32) continue;
+    }
+    out+=c;
+  }
+  return out;
+}
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 // SECTION: LIVE PRICE HOOK (Twelve Data via Cloudflare Worker)
@@ -578,17 +616,7 @@ function FTAnalyser({ analysedArticles, onNewArticle }) {
     const txt = jsonInput.trim();
     if (!txt) { setError("Paste the JSON returned by Claude first."); return; }
     try {
-      // Strip markdown code fences if present
-      let cleaned = txt.replace(/^```(?:json)?\n?/i, "").replace(/```$/, "").trim();
-      // Remove control characters that break JSON.parse (GPT sometimes adds these)
-      cleaned = cleaned.replace(/[\x00-\x1F\x7F]/g, (c) => {
-        // Keep legitimate whitespace: tab, newline, carriage return
-        if (c === "\t") return "\\t";
-        if (c === "\n") return "\\n";
-        if (c === "\r") return "\\r";
-        return ""; // strip everything else
-      });
-      const parsed = JSON.parse(cleaned);
+      const parsed = JSON.parse(sanitiseGPTJson(txt));
       if (!parsed.headline) {
         setError("JSON is missing 'headline' field. Check the format.");
         return;
@@ -789,14 +817,7 @@ function PortfolioTracker() {
     const txt = jsonInput.trim();
     if (!txt) { setError("Paste the JSON returned by Claude first."); return; }
     try {
-      let cleaned = txt.replace(/^```(?:json)?\n?/i, "").replace(/```$/, "").trim();
-      cleaned = cleaned.replace(/[\x00-\x1F\x7F]/g, (c) => {
-        if (c === "\t") return "\\t";
-        if (c === "\n") return "\\n";
-        if (c === "\r") return "\\r";
-        return "";
-      });
-      const parsed = JSON.parse(cleaned);
+      const parsed = JSON.parse(sanitiseGPTJson(txt));
       if (!Array.isArray(parsed)) {
         setError("Expected a JSON array of holdings. Got: " + (typeof parsed));
         return;
